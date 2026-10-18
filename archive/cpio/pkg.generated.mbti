@@ -1,0 +1,41 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Xpeng/linuxpkg/archive/cpio"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn build(Array[Entry]) -> Bytes raise CpioError
+
+pub fn parse(BytesView, max_entries? : Int) -> Array[Entry] raise CpioError
+
+// Errors
+pub(all) suberror CpioError {
+  Invalid(field~ : String, message~ : String)
+  Corrupt(offset~ : Int, message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for CpioError
+
+// Types and methods
+pub(all) struct Entry {
+  path : String
+  data : Bytes
+  mode : Int
+  uid : Int
+  gid : Int
+  nlink : Int
+  mtime : Int64
+  ino : Int
+  dev_major : Int
+  dev_minor : Int
+  rdev_major : Int
+  rdev_minor : Int
+} derive(Eq, @debug.Debug)
+pub fn Entry::dir(String, mode? : Int, uid? : Int, gid? : Int, mtime? : Int64, ino? : Int) -> Self
+pub fn Entry::file(String, Bytes, mode? : Int, uid? : Int, gid? : Int, mtime? : Int64, ino? : Int) -> Self
+pub fn Entry::symlink(String, String, uid? : Int, gid? : Int, mtime? : Int64, ino? : Int) -> Self
+
+// Type aliases
+
+// Traits
