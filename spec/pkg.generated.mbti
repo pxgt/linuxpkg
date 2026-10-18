@@ -48,6 +48,10 @@ pub(all) struct Dependency {
   name : String
   constraint : (VersionOp, String)?
 } derive(Eq, @debug.Debug)
+pub fn Dependency::deb_string(Self) -> String
+pub fn Dependency::parse(String, field? : String) -> Self raise SpecError
+pub fn Dependency::rpm_string(Self) -> String
+pub fn Dependency::validate(Self, field~ : String) -> Unit raise SpecError
 
 pub(all) struct Entry {
   path : String
@@ -61,6 +65,7 @@ pub(all) struct Entry {
 pub fn Entry::dir(String, mode? : Int, owner? : String, group? : String, mtime? : Int64) -> Self
 pub fn Entry::file(String, Bytes, mode? : Int, owner? : String, group? : String, mtime? : Int64, config? : Bool) -> Self
 pub fn Entry::symlink(String, String, owner? : String, group? : String, mtime? : Int64) -> Self
+pub fn Entry::validate(Self, field~ : String) -> Unit raise SpecError
 
 pub(all) enum EntryKind {
   File(Bytes)
@@ -92,6 +97,7 @@ pub(all) struct PackageSpec {
   mtime : Int64
 } derive(Eq, @debug.Debug)
 pub fn PackageSpec::new(name~ : String, version~ : String, arch~ : Arch, maintainer~ : String, description~ : String, release? : String, epoch? : Int, homepage? : String, license? : String, vendor? : String, section? : String, priority? : String, depends? : Array[Dependency], recommends? : Array[Dependency], suggests? : Array[Dependency], conflicts? : Array[Dependency], replaces? : Array[Dependency], provides? : Array[Dependency], entries? : Array[Entry], scripts? : Scripts, mtime? : Int64) -> Self
+pub fn PackageSpec::validate(Self) -> Unit raise SpecError
 
 pub(all) struct Scripts {
   pre_install : String?
@@ -108,6 +114,8 @@ pub(all) enum VersionOp {
   Ge
   Gt
 } derive(Eq, @debug.Debug)
+pub fn VersionOp::deb_symbol(Self) -> String
+pub fn VersionOp::rpm_symbol(Self) -> String
 
 // Type aliases
 
