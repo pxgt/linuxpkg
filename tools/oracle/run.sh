@@ -19,7 +19,8 @@ SUDO=""
 if [ "$(id -u)" -ne 0 ]; then SUDO="sudo"; fi
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+# Files created by "sudo rpm --root" belong to root, so clean up with sudo too.
+trap '$SUDO rm -rf "$WORK" 2>/dev/null || true' EXIT
 
 step() { printf '\n==> %s\n' "$*"; }
 pass() { printf '  ok: %s\n' "$*"; }
@@ -121,6 +122,87 @@ else
   echo "  lintian not installed, skipped"
 fi
 
+# ---------------------------------------------------------------- rpm
+if command -v rpm >/dev/null 2>&1 && command -v rpm2cpio >/dev/null 2>&1 && command -v cpio >/dev/null 2>&1; then
+  HAVE_RPM=1
+else
+  HAVE_RPM=0
+  echo "rpm, rpm2cpio or cpio is missing: skipping the rpm checks"
+fi
+
+if [ "$HAVE_RPM" = 1 ]; then
+  step "building examples/hello as an rpm"
+  "$BIN" build "$EXAMPLE" --format rpm --out "$WORK/rpm"
+  RPM="$WORK/rpm/hello-1.0.0-1.noarch.rpm"
+  [ -f "$RPM" ] || die "expected $RPM"
+  pass "built $(basename "$RPM") ($(stat -c %s "$RPM") bytes)"
+
+  step "rpm accepts the package"
+  rpm --version
+  KOUT="$(rpm -K --nosignature "$RPM" 2>&1)"
+  expect_in "rpm -K --nosignature" "digests OK" "$KOUT"
+  KVOUT="$(rpm -Kv "$RPM" 2>&1 || true)"
+  expect_in "header SHA256 digest" "Header SHA256 digest: OK" "$KVOUT"
+  expect_in "payload SHA256 digest" "Payload SHA256 digest: OK" "$KVOUT"
+  expect_eq "rpm -qp --qf" "$(rpm -qp --qf '%{NAME} %{VERSION} %{RELEASE} %{ARCH}' "$RPM")" "hello 1.0.0 1 noarch"
+  QI="$(rpm -qip "$RPM")"
+  expect_in "rpm -qip license" "License     : Apache-2.0" "$QI"
+  expect_in "rpm -qip url" "URL         : https://github.com/pxgt/linuxpkg" "$QI"
+  expect_in "rpm -qip summary" "Summary     : Example program packaged with linuxpkg" "$QI"
+  QL="$(rpm -qlp "$RPM")"
+  expect_eq "rpm -qlp file list" "$QL" "/etc/hello.conf
+/usr/bin/hello
+/usr/bin/hi
+/usr/share/doc/hello/README.txt
+/var/lib/hello"
+  expect_eq "rpm -qcp config files" "$(rpm -qcp "$RPM")" "/etc/hello.conf"
+  QLV="$(rpm -qlvp "$RPM")"
+  expect_in "executable mode" "-rwxr-xr-x" "$QLV"
+  expect_in "symlink" "/usr/bin/hi -> hello" "$QLV"
+  expect_in "directory" "drwxr-xr-x" "$QLV"
+  QS="$(rpm -qp --scripts "$RPM")"
+  expect_in "postinstall script" "echo installed > /var/lib/hello/state" "$QS"
+  expect_in "postuninstall script" "rm -f /var/lib/hello/state" "$QS"
+  expect_in "provides itself" "hello = 1.0.0-1" "$(rpm -qp --provides "$RPM")"
+  expect_in "requires rpmlib features" "rpmlib(FileDigests)" "$(rpm -qp --requires "$RPM")"
+
+  step "rpm2cpio | cpio extracts identical files"
+  mkdir "$WORK/rpm-extract"
+  (cd "$WORK/rpm-extract" && rpm2cpio "$RPM" | cpio -idm --quiet)
+  cmp "$WORK/rpm-extract/usr/bin/hello" examples/hello/hello.sh
+  cmp "$WORK/rpm-extract/etc/hello.conf" examples/hello/hello.conf
+  cmp "$WORK/rpm-extract/usr/share/doc/hello/README.txt" examples/hello/README.txt
+  expect_eq "symlink target" "$(readlink "$WORK/rpm-extract/usr/bin/hi")" "hello"
+  [ -d "$WORK/rpm-extract/var/lib/hello" ] || die "directory missing"
+  pass "payload files are identical to the sources"
+
+  step "rpm installs, verifies and erases the package in a private root"
+  ROOT="$WORK/rpm-root"
+  mkdir -p "$ROOT"
+  $SUDO rpm --root "$ROOT" --initdb
+  # Scriptlets need a shell inside the root, so they are skipped here; the
+  # container job runs them for real.
+  $SUDO rpm --root "$ROOT" -ivh --noscripts --nodeps "$RPM" >"$WORK/rpm-install.txt" 2>&1 || {
+    cat "$WORK/rpm-install.txt"
+    die "rpm -i failed"
+  }
+  expect_eq "rpm -q" "$($SUDO rpm --root "$ROOT" -q hello)" "hello-1.0.0-1.noarch"
+  [ -x "$ROOT/usr/bin/hello" ] || die "program not installed"
+  expect_eq "installed program" "$("$ROOT/usr/bin/hello")" "hello from linuxpkg"
+  expect_eq "installed symlink" "$(readlink "$ROOT/usr/bin/hi")" "hello"
+  # -V compares size, digest, mode, owner, link target and mtime of every file.
+  VERIFY_OUT="$($SUDO rpm --root "$ROOT" -V hello 2>&1 || true)"
+  if [ -n "$VERIFY_OUT" ]; then
+    echo "$VERIFY_OUT"
+    die "rpm -V found differences"
+  fi
+  pass "rpm -V finds no differences"
+  expect_eq "config file flag" "$($SUDO rpm --root "$ROOT" -qc hello)" "/etc/hello.conf"
+  $SUDO rpm --root "$ROOT" -e --noscripts hello
+  [ ! -e "$ROOT/usr/bin/hello" ] || die "program still installed after erase"
+  pass "erased"
+fi
+
 # ---------------------------------------------------------------- reverse
 step "inspect and verify our own deb"
 "$BIN" verify "$DEB"
@@ -201,9 +283,12 @@ expect_eq "a non-package exits with 1" "$STATUS" "1"
 
 # ---------------------------------------------------------------- reproducible
 step "reproducible builds"
-"$BIN" build "$EXAMPLE" --format deb --out "$WORK/again"
-cmp "$DEB" "$WORK/again/hello_1.0.0-1_all.deb"
-pass "two builds of the same config are byte-identical"
+"$BIN" build "$EXAMPLE" --out "$WORK/again1"
+"$BIN" build "$EXAMPLE" --out "$WORK/again2"
+cmp "$DEB" "$WORK/again1/hello_1.0.0-1_all.deb"
+cmp "$WORK/again1/hello_1.0.0-1_all.deb" "$WORK/again2/hello_1.0.0-1_all.deb"
+cmp "$WORK/again1/hello-1.0.0-1.noarch.rpm" "$WORK/again2/hello-1.0.0-1.noarch.rpm"
+pass "builds of the same config are byte-identical (deb and rpm)"
 # Same config without an mtime: SOURCE_DATE_EPOCH decides.
 sed '/"mtime"/d' "$EXAMPLE" >"$WORK/nomtime.json"
 for f in hello.sh hello.conf README.txt; do cp "examples/hello/$f" "$WORK/$f"; done
