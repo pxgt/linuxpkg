@@ -2,13 +2,14 @@
 
 **English summary.** linuxpkg is a pure-MoonBit toolkit (library + command line) that builds,
 inspects and verifies Linux packages. From one JSON file it produces Debian/Ubuntu/UOS/Kylin
-`.deb` packages without `dpkg-deb`, and it can read and check existing `.deb` files. RPM support
-(Fedora, openEuler, Anolis) is under development. Nothing is shelled out: because tar, ar and gzip
+`.deb` packages without `dpkg-deb` and `.rpm` packages (Fedora, openEuler, Anolis) without `rpmbuild`,
+and it can read and check existing `.deb` and `.rpm` files. Nothing is shelled out: because tar, ar and gzip
 are implemented in MoonBit, it runs on the wasm, wasm-gc, js and native backends, so you can build
 Linux packages on Windows or macOS. Output depends only on the input, so builds are reproducible.
-Every package we write is checked against the official tools (`dpkg-deb`, `dpkg -i`, `lintian`) in CI.
+Every package we write is checked against the official tools (`dpkg-deb`, `dpkg -i`, `lintian`, `rpm -K`,
+`rpm -V`, `rpm2cpio`) and installed in Debian, Ubuntu, Fedora and openEuler containers in CI.
 
-> 状态：开发中（0.0.1，尚未发布到 mooncakes）。deb 的构建、检查、校验已可用；rpm 正在开发。
+> 状态：开发中（0.0.1，尚未发布到 mooncakes）。deb 和 rpm 的构建、检查、校验都已可用。
 
 ## 它是什么
 
@@ -16,8 +17,8 @@ linuxpkg 是一个**纯 MoonBit** 实现的 Linux 软件包构建与检查工具
 同类工具有 Go 的 [nFPM](https://github.com/goreleaser/nfpm)、Ruby 的 fpm、Rust 的 cargo-deb。
 
 - 用一份 `linuxpkg.json`，把任意程序和文件打成 Debian / Ubuntu / 统信 UOS / 麒麟用的 `.deb`
-  （后续加上 Fedora / openEuler / 龙蜥用的 `.rpm`）。
-- 能读取、检查、校验已有的 `.deb`。
+  以及 Fedora / openEuler / 龙蜥用的 `.rpm`。
+- 能读取、检查、校验已有的 `.deb` 和 `.rpm`（包括官方工具生成的包）。
 - **不依赖** `dpkg-deb`、`rpmbuild` 等系统工具，所以在 Windows、macOS 上也能产出 Linux 包。
 - **可复现构建**：同样的输入逐字节产出同样的包（支持 `SOURCE_DATE_EPOCH`）。
 - 核心库不碰文件系统，可在 wasm / wasm-gc / js / native 四个后端运行；只有命令行读写文件。
@@ -31,8 +32,12 @@ linuxpkg 是一个**纯 MoonBit** 实现的 Linux 软件包构建与检查工具
 | 校验 `.deb`（`verify`：md5sums、gzip 校验和、路径安全） | ✅ |
 | tar（ustar / PAX / GNU 长名）读写、ar 读写 | ✅ |
 | `linuxpkg.json` 配置、依赖关系（`libc6 (>= 2.31)`） | ✅ |
-| 构建 / 检查 / 校验 `.rpm` | 🚧 开发中 |
-| cpio（newc）读写 | 🚧 开发中 |
+| 构建 `.rpm`（文件摘要 SHA-256、头部摘要、payload 摘要、依赖关系、脚本、配置文件） | ✅ |
+| 读取 / 检查 / 校验 `.rpm`（头部摘要、payload 摘要、每个文件的摘要） | ✅ |
+| cpio（newc）读写 | ✅ |
+| 依赖关系：`depends`、`recommends`、`suggests`、`conflicts`、`replaces`、`provides`（带版本约束） | ✅ |
+| 读取 xz / zstd 压缩的包的元数据（`inspect`） | ✅ |
+| 校验 xz / zstd 压缩的包的文件内容 | ❌ 明确报 unsupported |
 
 ## 安装与构建
 
@@ -51,10 +56,10 @@ moon run cmd/main --target wasm-gc -- --help
 
 ```sh
 linuxpkg init                                    # 写出一份示例 linuxpkg.json
-linuxpkg build examples/hello/linuxpkg.json --out dist
+linuxpkg build examples/hello/linuxpkg.json --out dist     # 同时生成 deb 和 rpm（--format deb|rpm|all）
 linuxpkg inspect dist/hello_1.0.0-1_all.deb      # 看元数据和文件列表
-linuxpkg inspect dist/hello_1.0.0-1_all.deb --json
-linuxpkg verify dist/hello_1.0.0-1_all.deb       # 退出码 0 表示通过
+linuxpkg inspect dist/hello-1.0.0-1.noarch.rpm --json
+linuxpkg verify dist/hello-1.0.0-1.noarch.rpm    # 退出码 0 表示通过
 ```
 
 退出码：`0` 成功；`1` 用法错误、文件读不了、不是包、或用了不支持的压缩；`2` `verify` 发现包损坏或被篡改。
@@ -97,7 +102,12 @@ linuxpkg verify dist/hello_1.0.0-1_all.deb       # 退出码 0 表示通过
 
 - 我们生成的 deb → `dpkg-deb --info/--contents/--extract`、`dpkg -i`、`dpkg --verify`、`dpkg -r`、`dpkg -P` 都接受，装好后程序能运行，
   配置文件在 `dpkg -r` 时保留、`dpkg -P` 时清除；`lintian` 的结果会记录下来。
-- 官方工具生成的 deb（`dpkg-deb` 1.21 的 gzip / xz 包）→ 我们的 `inspect` / `verify` 能正确读取；xz 会明确报“不支持的压缩”，不会崩溃。
+- 我们生成的 rpm → `rpm -K`（头部与 payload 的 SHA-256 摘要 OK）、`rpm -qip`、`rpm -qlp`、`rpm -qcp`、`--scripts`、`--requires/--provides`、
+  `rpm2cpio | cpio` 解出的文件与源文件逐字节相同；在私有 `--root` 里 `rpm -i`、`rpm -V`（无差异）、`rpm -e`；
+  在 Fedora 41、openEuler 24.03 LTS 容器里 `rpm -ivh` / `dnf install` 都能装、能跑、脚本会执行、能卸载。
+- 官方工具生成的包（`dpkg-deb` 的 gzip / xz deb，`rpmbuild` 的 gzip / xz / zstd rpm）→ 我们的 `inspect` / `verify` 能正确读取，
+  rpm 的 SHA-1 / MD5 / SHA-256 头部摘要、payload 摘要和每个文件的摘要都会核对；xz / zstd 压缩的内容会明确报“不支持的压缩”，不会崩溃。
+- Fedora 官方仓库里下载的真实 rpm（zstd payload）：`inspect` 读到的名称、版本、release、架构、文件列表与 `rpm -qp` 一致。
 - 我们写出的 ustar 归档与 GNU tar 1.34 逐字节一致；GNU tar 写出的 ustar / pax / gnu 三种格式我们都能读回。
 - 同样的输入构建两次，结果逐字节相同；wasm、wasm-gc、native 产出相同的包。
 
@@ -123,7 +133,7 @@ linuxpkg verify dist/hello_1.0.0-1_all.deb       # 退出码 0 表示通过
   [`oilleelssq-wq/moon-cpio`](https://mooncakes.io/docs/oilleelssq-wq/moon-cpio)（cpio 归档）两个底层零件。
   linuxpkg 自己实现了 ar / tar / cpio，是为了完全控制确定性输出，并让归档格式与打包逻辑一起被官方工具验证；对这两个项目表示尊重。
 - 配置字段命名参考 [nFPM](https://github.com/goreleaser/nfpm)（MIT）。
-- rpm 格式将参考 [google/rpmpack](https://github.com/google/rpmpack)（Apache-2.0）的格式知识，用 MoonBit 重新实现，不逐行翻译。
+- rpm 的头部布局、tag 与不可变区域参考 [google/rpmpack](https://github.com/google/rpmpack)（Apache-2.0）的格式知识，以 rpm 官方工具的实测结果为准，用 MoonBit 重新实现，没有复制代码。
 - gzip 来自 [moonbit-community/flate](https://mooncakes.io/docs/moonbit-community/flate)，摘要来自 `moonbitlang/x/crypto`。
 
 详见 [THIRD_PARTY.md](THIRD_PARTY.md)。

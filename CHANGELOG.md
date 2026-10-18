@@ -16,9 +16,14 @@ All notable changes are recorded here. The format follows
 - `archive/ar`: Debian-style ar writer and a reader that also understands GNU and BSD names.
 - `deb`: `build`, `read`, `verify` and `to_json`; control, md5sums, conffiles and maintainer scripts;
   reading of packages written by `dpkg-deb`.
-- `cmd/main`: `build` (deb), `init`, `inspect` (text and `--json`), `verify`, `--version`, `--help`.
+- `archive/cpio`: newc writer and reader.
+- `rpm`: header encoding/decoding with immutable regions, `build` (lead, signature header with SHA-256, main
+  header with file arrays, dependencies and scripts, gzip cpio payload with SHA-256 digests), `read`, `verify`
+  (header, payload and per-file digests) and `to_json`; reading of rpmbuild packages with gzip, xz and zstd payloads.
+- `cmd/main`: `build` (deb and rpm, `--format deb|rpm|all`), `init`, `inspect` (text and `--json`) and `verify` for both formats, `--version`, `--help`.
 - `examples/hello` and `tools/oracle` (checks against `dpkg-deb`, `dpkg`, `lintian`, GNU `tar`).
-- CI: verify job on wasm, wasm-gc, js and native; oracle job using the official packaging tools.
+- CI: verify job on wasm, wasm-gc, js and native; oracle job using the official packaging tools; containers job
+  installing the packages in Debian 12, Ubuntu 24.04, Fedora 41 and openEuler 24.03 LTS.
 
 ### Notes
 
