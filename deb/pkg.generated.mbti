@@ -1,0 +1,30 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Xpeng/linuxpkg/deb"
+
+import {
+  "Xpeng/linuxpkg/spec",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn build(@spec.PackageSpec) -> Bytes raise DebError
+
+pub fn control_file(@spec.PackageSpec) -> String
+
+pub fn file_name(@spec.PackageSpec) -> String
+
+pub fn version_string(@spec.PackageSpec) -> String
+
+// Errors
+pub(all) suberror DebError {
+  Invalid(field~ : String, message~ : String)
+  Corrupt(message~ : String)
+  Unsupported(message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for DebError
+
+// Types and methods
+
+// Type aliases
+
+// Traits
