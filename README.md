@@ -128,6 +128,15 @@ linuxpkg verify dist/hello-1.0.0-1.noarch.rpm    # 退出码 0 表示通过
 一个实测发现：Ubuntu 22.04 的 `dpkg -i` 解不了 PAX 扩展头（`unsupported PAX tar header type 'x'`），
 所以 deb 里的长路径使用 GNU `L`/`K` 长名条目，与 `dpkg-deb` 自己的做法一致。
 
+## 质量数字
+
+- 测试：179 个，wasm-gc、wasm、js、native 四个后端全部通过。
+- 核心包行覆盖率 **95.7%**（spec 97.6%、tar 97.3%、ar 96.4%、cpio 100%、deb 94.3%、rpm 94.1%、gunzip 88.2%），CI 强制不低于 80%（`tools/check_core_coverage.py`）。
+- 恶意输入：tar、ar、cpio、deb、rpm 的每一种截断和每个字节翻转都只会得到结果或明确的错误，不会崩溃；gzip 炸弹在解压时就被上限截住。
+
+文档：[配置参考](docs/config.md)、[格式说明与和规范的差异](docs/formats.md)、[如何复现所有验证](docs/verification.md)、
+[贡献指南](CONTRIBUTING.md)、[安全策略](SECURITY.md)。
+
 ## 范围与不做的事
 
 不做：

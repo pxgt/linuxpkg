@@ -6,6 +6,18 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `docs/` (formats, verification, configuration reference), `CONTRIBUTING.md`, `SECURITY.md`.
+- `tools/check_core_coverage.py` and a CI coverage floor of 80% (measured: 95.7%).
+- Hostile-input tests for every reader; duplicate file names in an rpm header are reported by `verify`.
+
+### Changed
+
+- gzip payloads are unpacked through a streaming decoder with a hard output limit, so a gzip bomb is stopped
+  while decoding instead of after allocation.
+- The js backend of the CLI skips node and the script path in its arguments.
+
 ## [0.1.0] - 2026-10-18
 
 First release.

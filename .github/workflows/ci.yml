@@ -57,6 +57,9 @@ jobs:
             done
           done
 
+      - name: Enforce the core line-coverage floor
+        run: python3 tools/check_core_coverage.py --minimum 80
+
       - name: Verify package artifact
         run: moon package --frozen
 
