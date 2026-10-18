@@ -17,3 +17,13 @@ pub extend DebError with Eq::{equal, not_equal}
 #deprecated("Format the error with string interpolation instead", skip_current_package=true)
 #doc(hidden)
 pub extend DebError with Show::{to_string, output}
+
+///|
+#deprecated("Use `Debug::to_repr` or `debug_inspect` instead", skip_current_package=true)
+#doc(hidden)
+pub extend DebPackage with Debug::{to_repr}
+
+///|
+#deprecated("Use `==` or `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend DebPackage with Eq::{equal, not_equal}
