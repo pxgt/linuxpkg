@@ -7,7 +7,7 @@ fn cmd_verify(args : Array[String]) -> Int32 raise CliError {
     _ => raise Usage("verify takes exactly one package file")
   }
   let pkg = load_package(path)
-  let problems = pkg.problems()
+  let problems = pkg.problems(path)
   if problems.length() > 0 {
     for problem in problems {
       eprintln("\{path}: \{problem}")
