@@ -1,0 +1,11 @@
+.DS_Store
+_build/
+target/
+.mooncakes/
+.repos/
+.moonagent/
+dist/
+*.deb
+*.rpm
+*.log
+*.tmp
