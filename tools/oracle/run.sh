@@ -177,29 +177,29 @@ if [ "$HAVE_RPM" = 1 ]; then
   pass "payload files are identical to the sources"
 
   step "rpm installs, verifies and erases the package in a private root"
-  ROOT="$WORK/rpm-root"
-  mkdir -p "$ROOT"
-  $SUDO rpm --root "$ROOT" --initdb
+  RPMROOT="$WORK/rpm-root"
+  mkdir -p "$RPMROOT"
+  $SUDO rpm --root "$RPMROOT" --initdb
   # Scriptlets need a shell inside the root, so they are skipped here; the
   # container job runs them for real.
-  $SUDO rpm --root "$ROOT" -ivh --noscripts --nodeps "$RPM" >"$WORK/rpm-install.txt" 2>&1 || {
+  $SUDO rpm --root "$RPMROOT" -ivh --noscripts --nodeps "$RPM" >"$WORK/rpm-install.txt" 2>&1 || {
     cat "$WORK/rpm-install.txt"
     die "rpm -i failed"
   }
-  expect_eq "rpm -q" "$($SUDO rpm --root "$ROOT" -q hello)" "hello-1.0.0-1.noarch"
-  [ -x "$ROOT/usr/bin/hello" ] || die "program not installed"
-  expect_eq "installed program" "$("$ROOT/usr/bin/hello")" "hello from linuxpkg"
-  expect_eq "installed symlink" "$(readlink "$ROOT/usr/bin/hi")" "hello"
+  expect_eq "rpm -q" "$($SUDO rpm --root "$RPMROOT" -q hello)" "hello-1.0.0-1.noarch"
+  [ -x "$RPMROOT/usr/bin/hello" ] || die "program not installed"
+  expect_eq "installed program" "$("$RPMROOT/usr/bin/hello")" "hello from linuxpkg"
+  expect_eq "installed symlink" "$(readlink "$RPMROOT/usr/bin/hi")" "hello"
   # -V compares size, digest, mode, owner, link target and mtime of every file.
-  VERIFY_OUT="$($SUDO rpm --root "$ROOT" -V hello 2>&1 || true)"
+  VERIFY_OUT="$($SUDO rpm --root "$RPMROOT" -V hello 2>&1 || true)"
   if [ -n "$VERIFY_OUT" ]; then
     echo "$VERIFY_OUT"
     die "rpm -V found differences"
   fi
   pass "rpm -V finds no differences"
-  expect_eq "config file flag" "$($SUDO rpm --root "$ROOT" -qc hello)" "/etc/hello.conf"
-  $SUDO rpm --root "$ROOT" -e --noscripts hello
-  [ ! -e "$ROOT/usr/bin/hello" ] || die "program still installed after erase"
+  expect_eq "config file flag" "$($SUDO rpm --root "$RPMROOT" -qc hello)" "/etc/hello.conf"
+  $SUDO rpm --root "$RPMROOT" -e --noscripts hello
+  [ ! -e "$RPMROOT/usr/bin/hello" ] || die "program still installed after erase"
   pass "erased"
 fi
 
@@ -399,7 +399,11 @@ cat >"$DEPS/linuxpkg.json" <<'JSON'
   "conflicts": ["relations-old (<< 1.0)"],
   "replaces": ["relations-old"],
   "provides": ["relations-compat (= 2.1)"],
-  "contents": [{ "src": "tool.sh", "dst": "/usr/bin/relations-tool", "mode": "0755" }]
+  "contents": [
+    { "src": "tool.sh", "dst": "/usr/bin/relations-tool", "mode": "0755" },
+    { "dst": "/var/lib/relations", "type": "dir", "mode": "0750", "owner": "daemon", "group": "daemon" },
+    { "src": "tool.sh", "dst": "/etc/relations.conf", "type": "config", "mode": "0640", "owner": "root", "group": "daemon" }
+  ]
 }
 JSON
 "$BIN" build "$DEPS/linuxpkg.json" --out "$DEPS/out"
@@ -412,9 +416,17 @@ expect_eq "deb Suggests" "$(dpkg-deb --field "$RDEB" Suggests)" "man-db (>> 2)"
 expect_eq "deb Conflicts" "$(dpkg-deb --field "$RDEB" Conflicts)" "relations-old (<< 1.0)"
 expect_eq "deb Replaces" "$(dpkg-deb --field "$RDEB" Replaces)" "relations-old"
 expect_eq "deb Provides" "$(dpkg-deb --field "$RDEB" Provides)" "relations-compat (= 2.1)"
+DEB_LIST="$(dpkg-deb --contents "$RDEB")"
+expect_in "deb owner and mode of the directory" "drwxr-x--- daemon/daemon" "$DEB_LIST"
+expect_in "deb owner and mode of the config file" "-rw-r----- root/daemon" "$DEB_LIST"
+expect_eq "deb conffiles" "$(dpkg-deb --ctrl-tarfile "$RDEB" | tar -xO ./conffiles)" "/etc/relations.conf"
 if [ "$HAVE_RPM" = 1 ]; then
   RRPM="$DEPS/out/relations-2.1.0-3.x86_64.rpm"
   [ -f "$RRPM" ] || die "expected $RRPM"
+  RPM_LIST="$(rpm -qlvp "$RRPM")"
+  expect_in "rpm owner and mode of the directory" "drwxr-x---    2 daemon   daemon" "$RPM_LIST"
+  expect_in "rpm owner and mode of the config file" "-rw-r-----    1 root     daemon" "$RPM_LIST"
+  expect_eq "rpm config files" "$(rpm -qcp "$RRPM")" "/etc/relations.conf"
   expect_eq "rpm epoch" "$(rpm -qp --qf '%{EPOCH}' "$RRPM")" "1"
   expect_eq "rpm Requires" "$(rpm -qp --requires "$RRPM" | grep -v '^rpmlib(')" "bash
 coreutils = 8.32
@@ -439,6 +451,47 @@ assert r["provides"] == ["relations = 1:2.1.0-3", "relations-compat = 2.1"], r["
 assert r["epoch"] == 1
 print("  ok: inspect --json reads the relations back")
 PY
+fi
+
+# ---------------------------------------------------------------- self-hosting
+step "linuxpkg packages itself (examples/self)"
+SELF_TARGET="${TARGET_DIR:-$ROOT/_build}"
+moon build --target native --release --target-dir "$SELF_TARGET" cmd/main
+RELEASE_BIN="$(find "$SELF_TARGET/native/release" -name main.exe -path '*cmd/main*' | head -n 1)"
+[ -x "$RELEASE_BIN" ] || die "release binary not found"
+VERSION="$("$RELEASE_BIN" --version | awk '{print $2}')"
+SELF_VERSION="$(python3 -c "import json;print(json.load(open('examples/self/linuxpkg.json'))['version'])")"
+expect_eq "examples/self version matches VERSION" "$SELF_VERSION" "$VERSION"
+python3 - "$RELEASE_BIN" "$ROOT" "$WORK/self.json" <<'PY'
+import json, sys
+binary, root, out = sys.argv[1:4]
+config = json.load(open(root + "/examples/self/linuxpkg.json"))
+for item in config["contents"]:
+    if item["dst"] == "/usr/bin/linuxpkg":
+        item["src"] = binary
+    else:
+        item["src"] = root + "/" + item["src"].replace("../../", "")
+json.dump(config, open(out, "w"), indent=2)
+PY
+"$BIN" build "$WORK/self.json" --out "$WORK/self"
+SELF_DEB="$WORK/self/linuxpkg_${VERSION}-1_amd64.deb"
+[ -f "$SELF_DEB" ] || die "expected $SELF_DEB"
+$SUDO dpkg -i "$SELF_DEB"
+expect_eq "installed linuxpkg --version" "$(linuxpkg --version)" "linuxpkg $VERSION"
+# The installed copy builds, inspects and verifies packages like the original.
+linuxpkg build "$EXAMPLE" --out "$WORK/by-installed"
+cmp "$DEB" "$WORK/by-installed/hello_1.0.0-1_all.deb"
+linuxpkg verify "$SELF_DEB"
+pass "the installed linuxpkg builds the same hello deb and verifies its own package"
+$SUDO dpkg -r linuxpkg
+[ ! -e /usr/bin/linuxpkg ] || die "linuxpkg still installed"
+if [ "$HAVE_RPM" = 1 ]; then
+  SELF_RPM="$WORK/self/linuxpkg-${VERSION}-1.x86_64.rpm"
+  rpm -K --nosignature "$SELF_RPM" | grep -q "digests OK" || die "rpm -K failed for the self package"
+  "$BIN" verify "$SELF_RPM"
+  mkdir "$WORK/self-extract"
+  (cd "$WORK/self-extract" && rpm2cpio "$SELF_RPM" | cpio -idm --quiet)
+  expect_eq "rpm payload runs" "$("$WORK/self-extract/usr/bin/linuxpkg" --version)" "linuxpkg $VERSION"
 fi
 
 # ---------------------------------------------------------------- reproducible

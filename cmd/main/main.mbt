@@ -90,8 +90,10 @@ fn dispatch(command : String, args : Array[String]) -> Int32 raise CliError {
 ///|
 fn main {
   let argv = @env.args()
-  // The first element is the program itself.
-  let args = if argv.length() > 0 { argv[1:].to_owned() } else { [] }
+  // The first element is the program itself; on the js backend it is node
+  // followed by the script path.
+  let skip = if argv.length() > 1 && argv[1].has_suffix(".js") { 2 } else { 1 }
+  let args = if argv.length() >= skip { argv[skip:].to_owned() } else { [] }
   let code = run(args)
   if code != 0 {
     @sys.exit(code)
