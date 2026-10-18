@@ -122,10 +122,15 @@ pub fn RpmPackage::verify(self : RpmPackage) -> Array[String] raise RpmError {
     }
   }
   let files = self.files()
+  let seen : Map[String, Bool] = Map([])
   for file in files {
     if has_dotdot(file.path) {
       problems.push("\{file.path}: path escapes the installation root")
     }
+    if seen.contains(file.path) {
+      problems.push("\{file.path}: listed more than once in the header")
+    }
+    seen[file.path] = true
   }
   let raw = try self.raw_payload(1073741824) catch {
     err =>
