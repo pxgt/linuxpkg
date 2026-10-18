@@ -17,6 +17,11 @@ pub(all) enum EntryKind {
   Dir
   /// A symbolic link pointing at the given target.
   Symlink(String)
+  /// A hard link to another path of the archive.
+  Hardlink(String)
+  /// Anything else (device, FIFO, ...), identified by its tar type flag.
+  /// Readers report it; writers refuse it.
+  Special(Int32)
 } derive(Eq, Debug)
 
 ///|
