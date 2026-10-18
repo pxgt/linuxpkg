@@ -17,10 +17,10 @@ naming, and everything was re-implemented in MoonBit.
 
 | Project | License | How it was used |
 |---|---|---|
-| [google/rpmpack](https://github.com/google/rpmpack) | Apache-2.0 | Reference for the RPM header layout, tags and immutable regions that the `rpm` package will implement (planned; not yet used by any released code). Re-designed in MoonBit, not translated line by line. |
+| [google/rpmpack](https://github.com/google/rpmpack) | Apache-2.0 | Reference for the RPM header layout, tags and immutable regions implemented in the `rpm` package. The layout is checked against rpm 4.17 itself (`rpm -K`, `rpm -V`, installs in Fedora and openEuler). Re-designed in MoonBit, not translated line by line; no code copied. |
 | [goreleaser/nfpm](https://github.com/goreleaser/nfpm) | MIT | Naming of the `linuxpkg.json` fields (`contents`, `src`, `dst`, `type`, `file_info`, ...). No code copied. |
 | [Debian Policy Manual](https://www.debian.org/doc/debian-policy/) and `deb(5)`, `deb-control(5)` | documentation | Layout of the deb container, the control file and maintainer scripts. |
-| [rpm.org file format documentation](https://rpm-software-management.github.io/rpm/manual/format.html) | documentation | RPM lead, signature header and payload layout (planned). |
+| [rpm.org file format documentation](https://rpm-software-management.github.io/rpm/manual/format.html) | documentation | RPM lead, signature header, tag numbers and payload layout. |
 | POSIX `pax` / ustar, GNU tar manual | documentation | tar header layout, prefix splitting, PAX records and GNU long names. |
 
 Compatible MoonBit packages we know of and deliberately did not depend on:
@@ -29,8 +29,8 @@ Compatible MoonBit packages we know of and deliberately did not depend on:
 
 ## Tools used only for verification
 
-`dpkg-deb`, `dpkg`, `lintian`, GNU `tar` and GNU `ar` are run by `tools/oracle/` and by the CI to
+`dpkg-deb`, `dpkg`, `lintian`, `rpm`, `rpmbuild`, `rpm2cpio`, GNU `cpio`, GNU `tar` and GNU `ar` are run by `tools/oracle/` and by the CI to
 check linuxpkg's output. They are not distributed with, or linked into, linuxpkg. Byte sequences
-produced by GNU tar 1.34 and dpkg-deb 1.21 are stored as test fixtures
-(`archive/tar/fixtures_test.mbt`, `deb/fixtures_test.mbt`); the scripts that regenerate them are in
+produced by GNU tar 1.34, GNU cpio 2.13, dpkg-deb 1.21 and rpmbuild 4.17 are stored as test fixtures
+(`archive/tar/fixtures_test.mbt`, `archive/cpio/fixtures_test.mbt`, `deb/fixtures_test.mbt`, `rpm/fixtures_test.mbt`); the scripts that regenerate them are in
 `tools/oracle/`.
