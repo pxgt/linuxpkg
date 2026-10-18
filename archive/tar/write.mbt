@@ -200,7 +200,72 @@ fn check_text(
 }
 
 ///|
-fn write_entry(out : Buffer, entry : Entry) -> Unit raise TarError {
+/// A PAX extended header (`x`) carrying the records that did not fit.
+fn write_pax_header(
+  out : Buffer,
+  records : Array[Bytes],
+  name : Bytes,
+  mtime : Int64,
+) -> Unit raise TarError {
+  let data = Buffer()
+  for record in records {
+    data.write_bytes(record)
+  }
+  let pax_name = @utf8.encode("PaxHeaders/")
+  let header = {
+    name: truncate_utf8(
+      Bytes::from_array([..pax_name, ..base_name(name)]),
+      NAME_SIZE,
+    ),
+    prefix: b""[:],
+    mode: 0o644,
+    uid: 0,
+    gid: 0,
+    size: data.length().to_int64(),
+    mtime,
+    typeflag: b'x',
+    linkname: b""[:],
+    uname: b""[:],
+    gname: b""[:],
+  }
+  out.write_bytes(header.encode())
+  out.write_bytes(data.to_bytes())
+  pad_to_block(out, data.length())
+}
+
+///|
+/// A GNU long name (`L`) or long link (`K`) pseudo entry: a header named
+/// `././@LongLink` whose data is the NUL terminated value.
+fn write_gnu_long(
+  out : Buffer,
+  typeflag : Byte,
+  value : Bytes,
+) -> Unit raise TarError {
+  let data = Bytes::from_array([..value, b'\x00'])
+  let header = {
+    name: b"././@LongLink"[:],
+    prefix: b""[:],
+    mode: 0,
+    uid: 0,
+    gid: 0,
+    size: data.length().to_int64(),
+    mtime: 0L,
+    typeflag,
+    linkname: b""[:],
+    uname: b""[:],
+    gname: b""[:],
+  }
+  out.write_bytes(header.encode())
+  out.write_bytes(data)
+  pad_to_block(out, data.length())
+}
+
+///|
+fn write_entry(
+  out : Buffer,
+  entry : Entry,
+  long_names : LongNames,
+) -> Unit raise TarError {
   let mut name = @utf8.encode(entry.path)
   check_text("path", name, 1 << 20, false)
   if entry.kind is Dir && name[name.length() - 1] != b'/' {
@@ -225,49 +290,45 @@ fn write_entry(out : Buffer, entry : Entry) -> Unit raise TarError {
       (b'2', link, b"")
     }
   }
-  let records : Array[Bytes] = []
+  let mut name_overflows = false
   let (prefix, short_name) = if name.length() <= NAME_SIZE {
     (b""[:], name[:])
   } else {
     match split_name(name) {
       Some(parts) => parts
       None => {
-        records.push(pax_record("path", name))
+        name_overflows = true
         (b""[:], truncate_utf8(name, NAME_SIZE))
       }
     }
   }
-  let link_field = if link.length() > NAME_SIZE {
-    records.push(pax_record("linkpath", link))
+  let link_overflows = link.length() > NAME_SIZE
+  let link_field = if link_overflows {
     truncate_utf8(link, NAME_SIZE)
   } else {
     link[:]
   }
-  if records.length() > 0 {
-    let data = Buffer()
-    for record in records {
-      data.write_bytes(record)
+  match long_names {
+    Pax => {
+      let records : Array[Bytes] = []
+      if name_overflows {
+        records.push(pax_record("path", name))
+      }
+      if link_overflows {
+        records.push(pax_record("linkpath", link))
+      }
+      if records.length() > 0 {
+        write_pax_header(out, records, name, entry.mtime)
+      }
     }
-    let pax_name = @utf8.encode("PaxHeaders/")
-    let header = {
-      name: truncate_utf8(
-        Bytes::from_array([..pax_name, ..base_name(name)]),
-        NAME_SIZE,
-      ),
-      prefix: b""[:],
-      mode: 0o644,
-      uid: 0,
-      gid: 0,
-      size: data.length().to_int64(),
-      mtime: entry.mtime,
-      typeflag: b'x',
-      linkname: b""[:],
-      uname: b""[:],
-      gname: b""[:],
+    Gnu => {
+      if link_overflows {
+        write_gnu_long(out, b'K', link)
+      }
+      if name_overflows {
+        write_gnu_long(out, b'L', name)
+      }
     }
-    out.write_bytes(header.encode())
-    out.write_bytes(data.to_bytes())
-    pad_to_block(out, data.length())
   }
   let header = {
     name: short_name,
@@ -291,9 +352,11 @@ fn write_entry(out : Buffer, entry : Entry) -> Unit raise TarError {
 /// Serialize entries into a ustar archive. The output depends only on the
 /// entries, so building the same list twice gives identical bytes.
 ///
-/// Names longer than 100 bytes are split into the ustar prefix when possible
-/// and otherwise stored in a PAX extended header. The archive ends with two
-/// zero blocks.
+/// Names longer than 100 bytes are split into the ustar prefix when possible.
+/// Otherwise, and for long link targets, `long_names` chooses the encoding:
+/// PAX extended headers (the default, understood by GNU tar, libarchive and
+/// Python) or GNU `L`/`K` entries (the only form `dpkg` can unpack). The
+/// archive ends with two zero blocks.
 ///
 /// # Example
 /// ```mbt check
@@ -303,10 +366,13 @@ fn write_entry(out : Buffer, entry : Entry) -> Unit raise TarError {
 ///   assert_eq(archive.length(), 4 * 512)
 /// }
 /// ```
-pub fn build(entries : Array[Entry]) -> Bytes raise TarError {
+pub fn build(
+  entries : Array[Entry],
+  long_names~ : LongNames = Pax,
+) -> Bytes raise TarError {
   let out = Buffer(size_hint=4096)
   for entry in entries {
-    write_entry(out, entry)
+    write_entry(out, entry, long_names)
   }
   out.write_bytes(Bytes::make(2 * BLOCK_SIZE, b'\x00'))
   out.to_bytes()

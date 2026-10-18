@@ -1,4 +1,14 @@
 ///|
+/// How names that do not fit a ustar header are stored.
+pub(all) enum LongNames {
+  /// POSIX PAX extended headers (`x`). Understood by GNU tar, libarchive and
+  /// Python, but not by the extractor inside `dpkg`.
+  Pax
+  /// GNU `L`/`K` pseudo entries, which is what `dpkg-deb` itself produces.
+  Gnu
+} derive(Eq, Debug)
+
+///|
 /// What a tar entry stores.
 pub(all) enum EntryKind {
   /// A regular file with its full content.

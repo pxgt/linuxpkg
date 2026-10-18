@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn build(Array[Entry]) -> Bytes raise TarError
+pub fn build(Array[Entry], long_names? : LongNames) -> Bytes raise TarError
 
 // Errors
 pub(all) suberror TarError {
@@ -35,6 +35,11 @@ pub(all) enum EntryKind {
   File(Bytes)
   Dir
   Symlink(String)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum LongNames {
+  Pax
+  Gnu
 } derive(Eq, @debug.Debug)
 
 // Type aliases
