@@ -68,7 +68,25 @@ jobs:
         run: moon update
 
       - name: Install the official packaging tools
-        run: sudo apt-get update && sudo apt-get install -y lintian
+        run: sudo apt-get update && sudo apt-get install -y lintian rpm rpm2cpio cpio
 
       - name: Compare linuxpkg output with dpkg and friends
         run: tools/oracle/run.sh
+
+  containers:
+    name: containers (Debian, Ubuntu, Fedora, openEuler)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Update package registry
+        run: moon update
+
+      - name: Install the packages in real distribution containers
+        run: tools/oracle/containers.sh
