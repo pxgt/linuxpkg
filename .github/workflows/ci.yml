@@ -46,6 +46,17 @@ jobs:
       - name: Test every backend
         run: moon test --target all
 
+      - name: CLI packages are byte-identical on native, wasm, wasm-gc and js
+        run: |
+          for t in native wasm wasm-gc js; do
+            moon run cmd/main --target "$t" -- build examples/hello/linuxpkg.json --out "/tmp/cli-$t"
+          done
+          for t in wasm wasm-gc js; do
+            for f in hello_1.0.0-1_all.deb hello-1.0.0-1.noarch.rpm; do
+              cmp "/tmp/cli-native/$f" "/tmp/cli-$t/$f"
+            done
+          done
+
       - name: Verify package artifact
         run: moon package --frozen
 
