@@ -27,7 +27,7 @@ const USAGE : String =
   #|  init     Write an example linuxpkg.json to edit.
   #|
   #|Options:
-  #|  -f, --format FORMAT  Package format to build: deb (default), rpm or all.
+  #|  -f, --format FORMAT  Package format to build: deb, rpm or all (default).
   #|  -o, --out DIR        Directory for the packages (default: current directory).
   #|      --json           Print machine readable JSON (inspect).
   #|      --force          Overwrite an existing file (init).

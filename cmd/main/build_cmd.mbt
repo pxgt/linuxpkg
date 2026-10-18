@@ -34,13 +34,10 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
   }
   let format = match options.value("format") {
     Some(f) => f
-    None => "deb"
+    None => "all"
   }
   if format != "deb" && format != "rpm" && format != "all" {
     raise Usage("unknown format \"\{format}\", expected deb, rpm or all")
-  }
-  if format != "deb" {
-    raise Failed("rpm output is not implemented yet, use --format deb")
   }
   let spec = load_spec(config_path)
   let out_dir = match options.value("out") {
@@ -48,11 +45,21 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
     None => ""
   }
   ensure_dir(out_dir)
-  let deb = @deb.build(spec) catch {
-    err => raise Failed("\{config_path}: \{err}")
+  if format == "deb" || format == "all" {
+    let deb = @deb.build(spec) catch {
+      err => raise Failed("\{config_path}: \{err}")
+    }
+    let target = join_path(out_dir, @deb.file_name(spec))
+    write_bytes(target, deb)
+    println("wrote \{target} (\{deb.length()} bytes)")
   }
-  let target = join_path(out_dir, @deb.file_name(spec))
-  write_bytes(target, deb)
-  println("wrote \{target} (\{deb.length()} bytes)")
+  if format == "rpm" || format == "all" {
+    let rpm = @rpm.build(spec) catch {
+      err => raise Failed("\{config_path}: \{err}")
+    }
+    let target = join_path(out_dir, @rpm.file_name(spec))
+    write_bytes(target, rpm)
+    println("wrote \{target} (\{rpm.length()} bytes)")
+  }
   0
 }
