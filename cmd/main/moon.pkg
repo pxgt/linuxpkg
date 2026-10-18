@@ -1,0 +1,11 @@
+import {
+  "Xpeng/linuxpkg",
+  "Xpeng/linuxpkg/spec",
+  "Xpeng/linuxpkg/deb",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
+  "moonbitlang/x/fs",
+  "moonbitlang/x/sys",
+}
+
+pkgtype(kind: "executable")
