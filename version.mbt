@@ -1,4 +1,4 @@
 ///|
 /// The linuxpkg release this build belongs to. Keep it equal to `version` in
 /// `moon.mod`.
-pub const VERSION : String = "0.1.0"
+pub const VERSION : String = "0.2.0"
