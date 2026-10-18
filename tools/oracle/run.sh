@@ -121,6 +121,84 @@ else
   echo "  lintian not installed, skipped"
 fi
 
+# ---------------------------------------------------------------- reverse
+step "inspect and verify our own deb"
+"$BIN" verify "$DEB"
+"$BIN" inspect "$DEB" --json >"$WORK/ours.json"
+"$BIN" inspect "$DEB" >"$WORK/ours.txt"
+expect_in "text report names the package" "Package:       hello" "$(cat "$WORK/ours.txt")"
+
+step "linuxpkg reads a deb written by the real dpkg-deb"
+mkdir "$WORK/ref"
+dpkg-deb --raw-extract "$DEB" "$WORK/ref/tree"
+SOURCE_DATE_EPOCH=1700000000 dpkg-deb --root-owner-group -Zgzip --build "$WORK/ref/tree" "$WORK/ref/dpkg.deb" >/dev/null
+"$BIN" verify "$WORK/ref/dpkg.deb"
+"$BIN" inspect "$WORK/ref/dpkg.deb" --json >"$WORK/ref/dpkg.json"
+python3 - "$WORK/ref/dpkg.json" "$WORK/ref/dpkg.deb" <<'PY'
+import json, subprocess, sys
+report = json.load(open(sys.argv[1]))
+deb = sys.argv[2]
+def field(name):
+    return subprocess.check_output(["dpkg-deb", "--field", deb, name], text=True).strip()
+for key, name in (("name", "Package"), ("version", "Version"), ("architecture", "Architecture")):
+    assert report[key] == field(name), (key, report[key], field(name))
+# The member list of dpkg-deb --contents: "perms owner/group size date time path [-> target]"
+listed = {}
+for line in subprocess.check_output(["dpkg-deb", "--contents", deb], text=True).splitlines():
+    parts = line.split(None, 5)
+    path = parts[5].split(" -> ")[0]
+    listed[path.lstrip(".") or "/"] = (parts[0], parts[1], int(parts[2]))
+ours = {f["path"]: f for f in report["files"]}
+assert len(ours) == len(listed), (sorted(ours), sorted(listed))
+for path, (perms, owner, size) in listed.items():
+    key = path.rstrip("/") or "/"
+    f = ours[key]
+    assert f["owner"] + "/" + f["group"] == owner, (path, f, owner)
+    assert f["size"] == size, (path, f["size"], size)
+    assert perms[0] == {"dir": "d", "file": "-", "symlink": "l"}[f["type"]], (path, perms, f)
+assert report["conffiles"] == ["/etc/hello.conf"], report["conffiles"]
+assert report["scripts"] == ["postinst", "postrm"], report["scripts"]
+assert report["compression"] == {"control": "gzip", "data": "gzip"}
+print("  ok: inspect --json agrees with dpkg-deb on %d entries" % len(listed))
+PY
+
+step "verify rejects damaged and tampered packages"
+python3 - "$WORK/ref/dpkg.deb" "$WORK/ref/flipped.deb" <<'PY'
+import sys
+data = bytearray(open(sys.argv[1], "rb").read())
+data[len(data) - 20] ^= 0xFF  # inside data.tar.gz
+open(sys.argv[2], "wb").write(data)
+PY
+set +e
+"$BIN" verify "$WORK/ref/flipped.deb" 2>"$WORK/err.txt"
+STATUS=$?
+set -e
+expect_eq "damaged gzip exits with 2" "$STATUS" "2"
+# Change a file but keep the md5sums: dpkg-deb happily builds it, verify must not.
+cp -r "$WORK/ref/tree" "$WORK/ref/forged"
+echo "echo pwned" >>"$WORK/ref/forged/usr/bin/hello"
+SOURCE_DATE_EPOCH=1700000000 dpkg-deb --root-owner-group -Zgzip --build "$WORK/ref/forged" "$WORK/ref/forged.deb" >/dev/null
+set +e
+"$BIN" verify "$WORK/ref/forged.deb" 2>"$WORK/err.txt"
+STATUS=$?
+set -e
+expect_eq "md5 mismatch exits with 2" "$STATUS" "2"
+expect_in "mismatch names the file" "/usr/bin/hello: md5 mismatch" "$(cat "$WORK/err.txt")"
+# An xz compressed deb is valid but unsupported: exit 1, not 2, and no crash.
+dpkg-deb --root-owner-group -Zxz --build "$WORK/ref/tree" "$WORK/ref/xz.deb" >/dev/null
+set +e
+"$BIN" verify "$WORK/ref/xz.deb" 2>"$WORK/err.txt"
+STATUS=$?
+set -e
+expect_eq "xz exits with 1" "$STATUS" "1"
+expect_in "xz is reported as unsupported" "xz compression is not supported" "$(cat "$WORK/err.txt")"
+printf 'not a package' >"$WORK/junk.deb"
+set +e
+"$BIN" verify "$WORK/junk.deb" 2>"$WORK/err.txt"
+STATUS=$?
+set -e
+expect_eq "a non-package exits with 1" "$STATUS" "1"
+
 # ---------------------------------------------------------------- reproducible
 step "reproducible builds"
 "$BIN" build "$EXAMPLE" --format deb --out "$WORK/again"
