@@ -1,0 +1,114 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Xpeng/linuxpkg/spec"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn validate_account(String, field~ : String) -> Unit raise SpecError
+
+pub fn validate_install_path(String, field~ : String) -> Unit raise SpecError
+
+pub fn validate_link_target(String, field~ : String) -> Unit raise SpecError
+
+pub fn validate_mode(Int, field~ : String) -> Unit raise SpecError
+
+pub fn validate_package_name(String) -> Unit raise SpecError
+
+pub fn validate_release(String) -> Unit raise SpecError
+
+pub fn validate_version(String) -> Unit raise SpecError
+
+// Errors
+pub(all) suberror SpecError {
+  Invalid(field~ : String, message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for SpecError
+
+// Types and methods
+pub(all) enum Arch {
+  Amd64
+  Arm64
+  I386
+  Armhf
+  Armel
+  Ppc64le
+  S390x
+  Riscv64
+  Loong64
+  Mips64le
+  All
+} derive(Eq, @debug.Debug)
+pub fn Arch::deb_name(Self) -> String
+pub fn Arch::parse(String) -> Self raise SpecError
+pub fn Arch::rpm_name(Self) -> String
+
+pub(all) struct Dependency {
+  name : String
+  constraint : (VersionOp, String)?
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Entry {
+  path : String
+  kind : EntryKind
+  mode : Int
+  owner : String
+  group : String
+  mtime : Int64?
+  config : Bool
+} derive(Eq, @debug.Debug)
+pub fn Entry::dir(String, mode? : Int, owner? : String, group? : String, mtime? : Int64) -> Self
+pub fn Entry::file(String, Bytes, mode? : Int, owner? : String, group? : String, mtime? : Int64, config? : Bool) -> Self
+pub fn Entry::symlink(String, String, owner? : String, group? : String, mtime? : Int64) -> Self
+
+pub(all) enum EntryKind {
+  File(Bytes)
+  Dir
+  Symlink(String)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct PackageSpec {
+  name : String
+  version : String
+  release : String
+  epoch : Int
+  arch : Arch
+  maintainer : String
+  description : String
+  homepage : String?
+  license : String?
+  vendor : String?
+  section : String
+  priority : String
+  depends : Array[Dependency]
+  recommends : Array[Dependency]
+  suggests : Array[Dependency]
+  conflicts : Array[Dependency]
+  replaces : Array[Dependency]
+  provides : Array[Dependency]
+  entries : Array[Entry]
+  scripts : Scripts
+  mtime : Int64
+} derive(Eq, @debug.Debug)
+pub fn PackageSpec::new(name~ : String, version~ : String, arch~ : Arch, maintainer~ : String, description~ : String, release? : String, epoch? : Int, homepage? : String, license? : String, vendor? : String, section? : String, priority? : String, depends? : Array[Dependency], recommends? : Array[Dependency], suggests? : Array[Dependency], conflicts? : Array[Dependency], replaces? : Array[Dependency], provides? : Array[Dependency], entries? : Array[Entry], scripts? : Scripts, mtime? : Int64) -> Self
+
+pub(all) struct Scripts {
+  pre_install : String?
+  post_install : String?
+  pre_remove : String?
+  post_remove : String?
+} derive(Eq, @debug.Debug)
+pub fn Scripts::empty() -> Self
+
+pub(all) enum VersionOp {
+  Lt
+  Le
+  Eq
+  Ge
+  Gt
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
