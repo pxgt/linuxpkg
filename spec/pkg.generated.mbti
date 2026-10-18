@@ -44,6 +44,50 @@ pub fn Arch::deb_name(Self) -> String
 pub fn Arch::parse(String) -> Self raise SpecError
 pub fn Arch::rpm_name(Self) -> String
 
+pub(all) struct Config {
+  name : String
+  version : String
+  release : String
+  epoch : Int
+  arch : Arch
+  maintainer : String
+  description : String
+  homepage : String?
+  license : String?
+  vendor : String?
+  section : String
+  priority : String
+  depends : Array[Dependency]
+  recommends : Array[Dependency]
+  suggests : Array[Dependency]
+  conflicts : Array[Dependency]
+  replaces : Array[Dependency]
+  provides : Array[Dependency]
+  contents : Array[Content]
+  scripts : ScriptPaths
+  mtime : Int64?
+} derive(Eq, @debug.Debug)
+pub fn Config::parse(String) -> Self raise SpecError
+pub fn Config::resolve(Self, Map[String, Bytes], default_mtime? : Int64) -> PackageSpec raise SpecError
+pub fn Config::sources(Self) -> Array[String]
+
+pub(all) struct Content {
+  src : String?
+  dst : String
+  kind : ContentKind
+  mode : Int?
+  owner : String?
+  group : String?
+  mtime : Int64?
+} derive(Eq, @debug.Debug)
+
+pub(all) enum ContentKind {
+  File
+  ConfigFile
+  Dir
+  Symlink
+} derive(Eq, @debug.Debug)
+
 pub(all) struct Dependency {
   name : String
   constraint : (VersionOp, String)?
@@ -98,6 +142,13 @@ pub(all) struct PackageSpec {
 } derive(Eq, @debug.Debug)
 pub fn PackageSpec::new(name~ : String, version~ : String, arch~ : Arch, maintainer~ : String, description~ : String, release? : String, epoch? : Int, homepage? : String, license? : String, vendor? : String, section? : String, priority? : String, depends? : Array[Dependency], recommends? : Array[Dependency], suggests? : Array[Dependency], conflicts? : Array[Dependency], replaces? : Array[Dependency], provides? : Array[Dependency], entries? : Array[Entry], scripts? : Scripts, mtime? : Int64) -> Self
 pub fn PackageSpec::validate(Self) -> Unit raise SpecError
+
+pub(all) struct ScriptPaths {
+  pre_install : String?
+  post_install : String?
+  pre_remove : String?
+  post_remove : String?
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Scripts {
   pre_install : String?
