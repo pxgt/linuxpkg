@@ -105,10 +105,12 @@ fn render_report(report : Json) -> String raise CliError {
   }
   line("Package:", field_text(map, "name"))
   line("Version:", field_text(map, "version"))
+  line("Release:", field_text(map, "release"))
   line("Architecture:", field_text(map, "architecture"))
   line("Maintainer:", field_text(map, "maintainer"))
   line("Homepage:", field_text(map, "homepage"))
   line("License:", field_text(map, "license"))
+  line("Vendor:", field_text(map, "vendor"))
   line("Section:", field_text(map, "section"))
   let size = field_text(map, "installed_size_kib")
   if size != "" {
@@ -147,10 +149,14 @@ fn render_report(report : Json) -> String raise CliError {
   }
   match map.get("compression") {
     Some(Object(compression)) =>
-      line(
-        "Compression:",
-        "control \{field_text(compression, "control")}, data \{field_text(compression, "data")}",
-      )
+      if compression.contains("payload") {
+        line("Compression:", "payload \{field_text(compression, "payload")}")
+      } else {
+        line(
+          "Compression:",
+          "control \{field_text(compression, "control")}, data \{field_text(compression, "data")}",
+        )
+      }
     _ => ()
   }
   match map.get("files") {
@@ -184,7 +190,7 @@ fn cmd_inspect(args : Array[String]) -> Int32 raise CliError {
     [] => raise Usage("inspect needs the path of a .deb or .rpm file")
     _ => raise Usage("inspect takes exactly one package file")
   }
-  let report = load_package(path).report()
+  let report = load_package(path).report(path)
   if options.flag("json") {
     println(report.stringify(indent=2))
   } else {

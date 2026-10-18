@@ -47,3 +47,23 @@ pub extend Header with Eq::{equal, not_equal}
 #deprecated("Format the error with string interpolation instead", skip_current_package=true)
 #doc(hidden)
 pub extend RpmError with Show::{to_string, output}
+
+///|
+#deprecated("Use `Debug::to_repr` or `debug_inspect` instead", skip_current_package=true)
+#doc(hidden)
+pub extend RpmPackage with Debug::{to_repr}
+
+///|
+#deprecated("Use `==` or `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend RpmPackage with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` or `debug_inspect` instead", skip_current_package=true)
+#doc(hidden)
+pub extend RpmFile with Debug::{to_repr}
+
+///|
+#deprecated("Use `==` or `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend RpmFile with Eq::{equal, not_equal}
