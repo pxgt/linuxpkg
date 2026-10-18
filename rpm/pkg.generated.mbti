@@ -2,10 +2,14 @@
 package "Xpeng/linuxpkg/rpm"
 
 import {
+  "Xpeng/linuxpkg/spec",
   "moonbitlang/core/debug",
 }
 
 // Values
+pub fn build(@spec.PackageSpec) -> Bytes raise RpmError
+
+pub fn file_name(@spec.PackageSpec) -> String
 
 // Errors
 pub(all) suberror RpmError {
