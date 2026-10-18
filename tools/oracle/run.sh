@@ -19,7 +19,8 @@ SUDO=""
 if [ "$(id -u)" -ne 0 ]; then SUDO="sudo"; fi
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+# Files created by "sudo rpm --root" belong to root, so clean up with sudo too.
+trap '$SUDO rm -rf "$WORK" 2>/dev/null || true' EXIT
 
 step() { printf '\n==> %s\n' "$*"; }
 pass() { printf '  ok: %s\n' "$*"; }
