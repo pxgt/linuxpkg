@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-18
+
+First release.
+
 ### Added
 
 - `spec`: `PackageSpec` model, validation of names, versions, install paths, modes, owners and
@@ -28,3 +32,6 @@ All notable changes are recorded here. The format follows
 ### Notes
 
 - deb data archives use GNU `L`/`K` long names: the extractor in `dpkg` 1.21 rejects PAX headers.
+
+[Unreleased]: https://github.com/pxgt/linuxpkg/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/pxgt/linuxpkg/releases/tag/v0.1.0
