@@ -9,7 +9,7 @@ Linux packages on Windows or macOS. Output depends only on the input, so builds 
 Every package we write is checked against the official tools (`dpkg-deb`, `dpkg -i`, `lintian`, `rpm -K`,
 `rpm -V`, `rpm2cpio`) and installed in Debian, Ubuntu, Fedora and openEuler containers in CI.
 
-> 状态：开发中（0.0.1，尚未发布到 mooncakes）。deb 和 rpm 的构建、检查、校验都已可用。
+> 状态：0.1.0 已发布到 mooncakes（`Xpeng/linuxpkg`）。deb 和 rpm 的构建、检查、校验都已可用。
 
 ## 它是什么
 
@@ -41,16 +41,23 @@ linuxpkg 是一个**纯 MoonBit** 实现的 Linux 软件包构建与检查工具
 
 ## 安装与构建
 
-目前从源码使用（需要 MoonBit 工具链 `moon` 0.1.20261012 或更新）：
+作为库使用（需要 MoonBit 工具链 `moon` 0.1.20261012 或更新）：
+
+```sh
+moon add Xpeng/linuxpkg
+```
+
+然后在 `moon.pkg` 里按需导入子包：`Xpeng/linuxpkg/spec`（包模型与配置）、`Xpeng/linuxpkg/deb`、`Xpeng/linuxpkg/rpm`、
+`Xpeng/linuxpkg/archive/tar`、`Xpeng/linuxpkg/archive/ar`、`Xpeng/linuxpkg/archive/cpio`。核心库不碰文件系统，可在所有后端运行。
+
+命令行程序从源码构建：
 
 ```sh
 git clone https://github.com/pxgt/linuxpkg
 cd linuxpkg
-moon build --target native cmd/main    # 命令行程序，Windows 上请用 wasm-gc 或在 WSL 里用 native
+moon build --target native cmd/main    # Windows 上请用 wasm-gc，或在 WSL 里用 native
 moon run cmd/main --target wasm-gc -- --help
 ```
-
-发布到 mooncakes 之后，库将作为 `Xpeng/linuxpkg` 提供：`moon add Xpeng/linuxpkg`。
 
 ## 快速开始
 
