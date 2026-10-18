@@ -51,3 +51,24 @@ jobs:
 
       - name: Reject generated or formatting drift
         run: git diff --exit-code
+
+  oracle:
+    name: oracle (official tools)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Update package registry
+        run: moon update
+
+      - name: Install the official packaging tools
+        run: sudo apt-get update && sudo apt-get install -y lintian
+
+      - name: Compare linuxpkg output with dpkg and friends
+        run: tools/oracle/run.sh
