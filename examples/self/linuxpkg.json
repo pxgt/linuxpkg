@@ -1,0 +1,21 @@
+{
+  "name": "linuxpkg",
+  "version": "0.0.1",
+  "release": "1",
+  "arch": "amd64",
+  "maintainer": "pxgt <133531533+pxgt@users.noreply.github.com>",
+  "description": "Build, inspect and verify deb and rpm packages\nlinuxpkg is written in MoonBit. This package contains its own native\ncommand line program, built by linuxpkg itself.",
+  "homepage": "https://github.com/pxgt/linuxpkg",
+  "license": "Apache-2.0",
+  "section": "utils",
+  "mtime": 1700000000,
+  "contents": [
+    {
+      "src": "../../_build/native/release/build/cmd/main/main.exe",
+      "dst": "/usr/bin/linuxpkg",
+      "mode": "0755"
+    },
+    { "src": "../../README.md", "dst": "/usr/share/doc/linuxpkg/README.md" },
+    { "src": "../../LICENSE", "dst": "/usr/share/doc/linuxpkg/LICENSE" }
+  ]
+}
