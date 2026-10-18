@@ -1,0 +1,8 @@
+import {
+  "Xpeng/linuxpkg/spec",
+  "Xpeng/linuxpkg/archive/tar",
+  "Xpeng/linuxpkg/archive/ar",
+  "moonbit-community/flate/gzip",
+  "moonbitlang/x/crypto",
+  "moonbitlang/core/encoding/utf8",
+}
