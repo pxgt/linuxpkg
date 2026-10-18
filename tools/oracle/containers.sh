@@ -76,9 +76,59 @@ run_rpm() { # image
   '
 }
 
+real_distribution_rpm() { # image
+  # Download a genuine distribution package (zstd payload, signed) with the
+  # distribution's own dnf, and check that linuxpkg reads its header like rpm.
+  local image="$1"
+  step "$image: linuxpkg reads a real distribution rpm"
+  mkdir -p "$WORK/real"
+  docker run --rm -v "$WORK/real:/out" "$image" bash -ec '
+    dnf download --destdir /out hello || { dnf install -y dnf-plugins-core && dnf download --destdir /out hello; }
+    f=$(ls /out/hello-*.rpm | head -n 1)
+    {
+      rpm -qp --qf "name=%{NAME}\nversion=%{VERSION}\nrelease=%{RELEASE}\narch=%{ARCH}\ncompressor=%{PAYLOADCOMPRESSOR}\n" "$f"
+      echo "files=$(rpm -qlp "$f" | wc -l)"
+    } > /out/expected.txt
+    rpm -qlp "$f" > /out/files.txt
+    rpm -K "$f" || true
+  '
+  local real
+  real="$(ls "$WORK"/real/hello-*.rpm | head -n 1)"
+  "$BIN" inspect "$real"
+  "$BIN" inspect "$real" --json >"$WORK/real/report.json"
+  python3 - "$WORK/real/report.json" "$WORK/real/expected.txt" "$WORK/real/files.txt" <<'PY'
+import json, sys
+report = json.load(open(sys.argv[1]))
+expected = dict(line.split("=", 1) for line in open(sys.argv[2]).read().splitlines())
+files = open(sys.argv[3]).read().splitlines()
+for key, field in (("name", "name"), ("version", "version"), ("release", "release"), ("arch", "architecture")):
+    assert report[field] == expected[key], (field, report[field], expected[key])
+assert report["compression"]["payload"] == expected["compressor"], (report["compression"], expected["compressor"])
+assert len(report["files"]) == int(expected["files"]), (len(report["files"]), expected["files"])
+assert [f["path"] for f in report["files"]] == files
+print("  ok: name, version, release, arch, payload compressor and %d file names agree with rpm -qp" % len(files))
+PY
+  # The payload is compressed with zstd: verify must say so and not crash.
+  set +e
+  "$BIN" verify "$real" 2>"$WORK/real/verify.err"
+  local status=$?
+  set -e
+  cat "$WORK/real/verify.err"
+  if grep -q "zstd compression of the payload is not supported" "$WORK/real/verify.err"; then
+    [ "$status" = 1 ] || die "unsupported compression must exit with 1, got $status"
+    echo "  ok: verify reports the zstd payload as unsupported (exit 1)"
+  else
+    # An older release with a gzip payload: it has to verify cleanly.
+    [ "$status" = 0 ] || die "verify of a real rpm failed with $status"
+    echo "  ok: verify accepted the real rpm"
+  fi
+  docker run --rm -v "$WORK/real:/out" "$image" sh -c 'rm -rf /out/*'
+}
+
 run_deb debian:12
 run_deb ubuntu:24.04
 run_rpm fedora:41
+real_distribution_rpm fedora:41
 
 OPENEULER="openeuler/openeuler:24.03-lts"
 if docker pull "$OPENEULER" >/dev/null 2>&1; then

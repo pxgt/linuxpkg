@@ -281,6 +281,166 @@ STATUS=$?
 set -e
 expect_eq "a non-package exits with 1" "$STATUS" "1"
 
+if [ "$HAVE_RPM" = 1 ] && command -v rpmbuild >/dev/null 2>&1; then
+  step "inspect and verify our own rpm"
+  "$BIN" verify "$RPM"
+  "$BIN" inspect "$RPM" >"$WORK/ours-rpm.txt"
+  expect_in "text report names the package" "Package:       hello" "$(cat "$WORK/ours-rpm.txt")"
+
+  step "linuxpkg reads an rpm written by the real rpmbuild"
+  RB="$WORK/rpmbuild"
+  mkdir -p "$RB/top/SPECS"
+  cat >"$RB/top/SPECS/hello.spec" <<'SPEC'
+Name: hello
+Version: 1.0.0
+Release: 1
+Summary: Reference package built by rpmbuild
+License: Apache-2.0
+BuildArch: noarch
+AutoReqProv: no
+Requires: bash >= 4.0
+
+%description
+Reference package built by the real rpmbuild from the files linuxpkg packaged.
+
+%install
+mkdir -p %{buildroot}
+cp -a %{extracted}/. %{buildroot}/
+
+%files
+%defattr(-,root,root,-)
+%config /etc/hello.conf
+/usr/bin/hello
+/usr/bin/hi
+%dir /var/lib/hello
+/usr/share/doc/hello/README.txt
+SPEC
+  SOURCE_DATE_EPOCH=1700000000 rpmbuild -bb --define "_topdir $RB/top" \
+    --define "_binary_payload w9.gzdio" --define "extracted $WORK/rpm-extract" \
+    --define "_build_id_links none" --define "clamp_mtime_to_source_date_epoch 1" \
+    "$RB/top/SPECS/hello.spec" >"$RB/build.log" 2>&1 || { cat "$RB/build.log"; die "rpmbuild failed"; }
+  REF="$RB/top/RPMS/noarch/hello-1.0.0-1.noarch.rpm"
+  [ -f "$REF" ] || die "rpmbuild produced no package"
+  rpm -K "$REF" >/dev/null
+  "$BIN" verify "$REF"
+  "$BIN" inspect "$REF" --json >"$RB/ref.json"
+  python3 - "$RB/ref.json" "$REF" <<'PY'
+import json, subprocess, sys
+report = json.load(open(sys.argv[1]))
+rpm = sys.argv[2]
+def q(fmt):
+    return subprocess.check_output(["rpm", "-qp", "--qf", fmt, rpm], text=True)
+assert report["format"] == "rpm"
+for key, tag in (("name", "NAME"), ("version", "VERSION"), ("release", "RELEASE"), ("architecture", "ARCH")):
+    assert report[key] == q("%{" + tag + "}"), (key, report[key], q("%{" + tag + "}"))
+paths = q("[%{FILENAMES}\n]").splitlines()
+assert [f["path"] for f in report["files"]] == paths, (paths, report["files"])
+sizes = [int(x) for x in q("[%{FILESIZES}\n]").splitlines()]
+assert [f["size"] for f in report["files"]] == sizes
+users = q("[%{FILEUSERNAME}/%{FILEGROUPNAME}\n]").splitlines()
+assert [f["owner"] + "/" + f["group"] for f in report["files"]] == users
+modes = [int(x) for x in q("[%{FILEMODES}\n]").splitlines()]
+for f, m in zip(report["files"], modes):
+    assert f["mode"] == "0%o" % (m & 0o7777), (f, m)
+flags = [int(x) for x in q("[%{FILEFLAGS}\n]").splitlines()]
+assert report["conffiles"] == [p for p, fl in zip(paths, flags) if fl & 1], report["conffiles"]
+assert report["depends"] == ["bash >= 4.0"], report["depends"]
+assert report["compression"] == {"payload": "gzip"}
+print("  ok: inspect --json agrees with rpm -qp on %d files" % len(paths))
+PY
+
+  step "verify rejects damaged and tampered rpms"
+  python3 - "$REF" "$RB/flipped.rpm" <<'PY'
+import sys
+data = bytearray(open(sys.argv[1], "rb").read())
+data[len(data) - 40] ^= 0xFF  # inside the payload
+open(sys.argv[2], "wb").write(data)
+PY
+  set +e
+  "$BIN" verify "$RB/flipped.rpm" 2>"$WORK/err.txt"
+  STATUS=$?
+  set -e
+  expect_eq "damaged payload exits with 2" "$STATUS" "2"
+  expect_in "reported as a digest mismatch" "mismatch" "$(cat "$WORK/err.txt")"
+  # A payload compressed with xz is valid but unsupported: exit 1, no crash.
+  SOURCE_DATE_EPOCH=1700000000 rpmbuild -bb --define "_topdir $RB/top" \
+    --define "_binary_payload w2.xzdio" --define "extracted $WORK/rpm-extract" \
+    --define "_build_id_links none" --define "clamp_mtime_to_source_date_epoch 1" \
+    "$RB/top/SPECS/hello.spec" >"$RB/build-xz.log" 2>&1 || die "rpmbuild (xz) failed"
+  XZ_RPM="$RB/top/RPMS/noarch/hello-1.0.0-1.noarch.rpm"
+  set +e
+  "$BIN" verify "$XZ_RPM" 2>"$WORK/err.txt"
+  STATUS=$?
+  set -e
+  expect_eq "xz payload exits with 1" "$STATUS" "1"
+  expect_in "xz is reported as unsupported" "xz compression of the payload is not supported" "$(cat "$WORK/err.txt")"
+  "$BIN" inspect "$XZ_RPM" >/dev/null
+  pass "inspect still works on the xz rpm"
+fi
+
+# ---------------------------------------------------------------- relations
+step "dependency relations reach both formats"
+DEPS="$WORK/deps"
+mkdir -p "$DEPS"
+printf '#!/bin/sh\necho deps\n' >"$DEPS/tool.sh"
+cat >"$DEPS/linuxpkg.json" <<'JSON'
+{
+  "name": "relations",
+  "version": "2.1.0",
+  "release": "3",
+  "epoch": 1,
+  "arch": "amd64",
+  "maintainer": "Test <test@example.org>",
+  "description": "Relations test\nChecks how depends, conflicts, replaces and provides are written.",
+  "mtime": 1700000000,
+  "depends": ["libc6 (>= 2.31)", "bash", "zlib1g (<< 2.0)", "coreutils = 8.32"],
+  "recommends": ["less"],
+  "suggests": ["man-db > 2"],
+  "conflicts": ["relations-old (<< 1.0)"],
+  "replaces": ["relations-old"],
+  "provides": ["relations-compat (= 2.1)"],
+  "contents": [{ "src": "tool.sh", "dst": "/usr/bin/relations-tool", "mode": "0755" }]
+}
+JSON
+"$BIN" build "$DEPS/linuxpkg.json" --out "$DEPS/out"
+RDEB="$DEPS/out/relations_2.1.0-3_amd64.deb"
+expect_eq "deb file name" "$(ls "$DEPS/out" | grep deb)" "relations_2.1.0-3_amd64.deb"
+expect_eq "deb Version (with epoch)" "$(dpkg-deb --field "$RDEB" Version)" "1:2.1.0-3"
+expect_eq "deb Depends" "$(dpkg-deb --field "$RDEB" Depends)" "libc6 (>= 2.31), bash, zlib1g (<< 2.0), coreutils (= 8.32)"
+expect_eq "deb Recommends" "$(dpkg-deb --field "$RDEB" Recommends)" "less"
+expect_eq "deb Suggests" "$(dpkg-deb --field "$RDEB" Suggests)" "man-db (>> 2)"
+expect_eq "deb Conflicts" "$(dpkg-deb --field "$RDEB" Conflicts)" "relations-old (<< 1.0)"
+expect_eq "deb Replaces" "$(dpkg-deb --field "$RDEB" Replaces)" "relations-old"
+expect_eq "deb Provides" "$(dpkg-deb --field "$RDEB" Provides)" "relations-compat (= 2.1)"
+if [ "$HAVE_RPM" = 1 ]; then
+  RRPM="$DEPS/out/relations-2.1.0-3.x86_64.rpm"
+  [ -f "$RRPM" ] || die "expected $RRPM"
+  expect_eq "rpm epoch" "$(rpm -qp --qf '%{EPOCH}' "$RRPM")" "1"
+  expect_eq "rpm Requires" "$(rpm -qp --requires "$RRPM" | grep -v '^rpmlib(')" "bash
+coreutils = 8.32
+libc6 >= 2.31
+zlib1g < 2.0"
+  expect_eq "rpm Conflicts" "$(rpm -qp --conflicts "$RRPM")" "relations-old < 1.0"
+  expect_eq "rpm Obsoletes" "$(rpm -qp --obsoletes "$RRPM")" "relations-old"
+  expect_eq "rpm Provides" "$(rpm -qp --provides "$RRPM")" "relations = 1:2.1.0-3
+relations-compat = 2.1"
+  expect_eq "rpm Recommends" "$(rpm -qp --recommends "$RRPM")" "less"
+  expect_eq "rpm Suggests" "$(rpm -qp --suggests "$RRPM")" "man-db > 2"
+  # The reader maps them back.
+  "$BIN" inspect "$RRPM" --json >"$DEPS/rpm.json"
+  python3 - "$DEPS/rpm.json" <<'PY'
+import json, sys
+r = json.load(open(sys.argv[1]))
+assert r["depends"] == ["bash", "coreutils = 8.32", "libc6 >= 2.31", "zlib1g < 2.0"], r["depends"]
+assert r["conflicts"] == ["relations-old < 1.0"], r["conflicts"]
+assert r["replaces"] == ["relations-old"], r["replaces"]
+assert r["recommends"] == ["less"] and r["suggests"] == ["man-db > 2"]
+assert r["provides"] == ["relations = 1:2.1.0-3", "relations-compat = 2.1"], r["provides"]
+assert r["epoch"] == 1
+print("  ok: inspect --json reads the relations back")
+PY
+fi
+
 # ---------------------------------------------------------------- reproducible
 step "reproducible builds"
 "$BIN" build "$EXAMPLE" --out "$WORK/again1"
