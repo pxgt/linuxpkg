@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-18
+
 ### Added
 
 - `docs/` (formats, verification, configuration reference), `CONTRIBUTING.md`, `SECURITY.md`.
@@ -45,5 +47,6 @@ First release.
 
 - deb data archives use GNU `L`/`K` long names: the extractor in `dpkg` 1.21 rejects PAX headers.
 
-[Unreleased]: https://github.com/pxgt/linuxpkg/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/pxgt/linuxpkg/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/pxgt/linuxpkg/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/pxgt/linuxpkg/releases/tag/v0.1.0

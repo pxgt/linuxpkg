@@ -9,7 +9,7 @@ Linux packages on Windows or macOS. Output depends only on the input, so builds 
 Every package we write is checked against the official tools (`dpkg-deb`, `dpkg -i`, `lintian`, `rpm -K`,
 `rpm -V`, `rpm2cpio`) and installed in Debian, Ubuntu, Fedora and openEuler containers in CI.
 
-> 状态：0.1.0 已发布到 mooncakes（`Xpeng/linuxpkg`）。deb 和 rpm 的构建、检查、校验都已可用。
+> 状态：0.2.0 已发布到 mooncakes（`Xpeng/linuxpkg`）。deb 和 rpm 的构建、检查、校验都已可用。
 
 ## 它是什么
 
@@ -53,8 +53,8 @@ moon add Xpeng/linuxpkg
 不安装，直接运行已发布的命令行程序（`moonx` 会下载预编译的 wasm 版本，文件路径请用绝对路径）：
 
 ```sh
-moonx Xpeng/linuxpkg/cmd/main@0.1.0 inspect /绝对路径/hello_1.0.0-1_all.deb
-moonx Xpeng/linuxpkg/cmd/main@0.1.0 verify /绝对路径/hello-1.0.0-1.noarch.rpm
+moonx Xpeng/linuxpkg/cmd/main@0.2.0 inspect /绝对路径/hello_1.0.0-1_all.deb
+moonx Xpeng/linuxpkg/cmd/main@0.2.0 verify /绝对路径/hello-1.0.0-1.noarch.rpm
 ```
 
 命令行程序也可以从源码构建：
