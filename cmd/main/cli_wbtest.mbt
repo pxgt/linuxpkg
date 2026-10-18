@@ -12,6 +12,7 @@ fn options_error(args : Array[String]) -> String {
   try options_of(args) catch {
     Usage(message) => "usage: \{message}"
     Failed(message) => "failed: \{message}"
+    Mismatch(message) => "mismatch: \{message}"
   } noraise {
     _ => "ok"
   }
@@ -91,4 +92,85 @@ test "exit codes of the front end" {
   assert_eq(run(["build", "a.json", "--format", "zip"]), 1)
   assert_eq(run(["build", "does-not-exist.json"]), 1)
   assert_eq(run(["init", "a", "b"]), 1)
+}
+
+///|
+test "permission strings look like ls -l" {
+  assert_eq(mode_string("file", "0644"), "-rw-r--r--")
+  assert_eq(mode_string("file", "0755"), "-rwxr-xr-x")
+  assert_eq(mode_string("dir", "0750"), "drwxr-x---")
+  assert_eq(mode_string("symlink", "0777"), "lrwxrwxrwx")
+  assert_eq(mode_string("file", "4755"), "-rwsr-xr-x")
+  assert_eq(mode_string("file", "4644"), "-rwSr--r--")
+  assert_eq(mode_string("dir", "1777"), "drwxrwxrwt")
+  assert_eq(mode_string("dir", "1776"), "drwxrwxrwT")
+  assert_eq(mode_string("dir", "2755"), "drwxr-sr-x")
+}
+
+///|
+test "rendering a package report" {
+  let report : Json = {
+    "format": "deb",
+    "name": "hello",
+    "version": "1.0-1",
+    "architecture": "all",
+    "maintainer": "Jane <jane@example.org>",
+    "homepage": null,
+    "installed_size_kib": "1",
+    "description": "Says hello\nSecond line",
+    "depends": ["bash (>= 4.0)", "coreutils"],
+    "conffiles": ["/etc/hello.conf"],
+    "scripts": ["postinst"],
+    "compression": { "control": "gzip", "data": "gzip" },
+    "files": [
+      {
+        "path": "/usr/bin/hello",
+        "type": "file",
+        "mode": "0755",
+        "owner": "root",
+        "group": "root",
+        "size": 37,
+        "link": null,
+      },
+      {
+        "path": "/usr/bin/hi",
+        "type": "symlink",
+        "mode": "0777",
+        "owner": "root",
+        "group": "root",
+        "size": 0,
+        "link": "hello",
+      },
+    ],
+  }
+  inspect(
+    render_report(report),
+    content=(
+      #|Package:       hello
+      #|Version:       1.0-1
+      #|Architecture:  all
+      #|Maintainer:    Jane <jane@example.org>
+      #|Installed size: 1 KiB
+      #|Depends:       bash (>= 4.0), coreutils
+      #|Description:   Says hello
+      #|               Second line
+      #|Scripts:       postinst
+      #|Config files:  /etc/hello.conf
+      #|Compression:   control gzip, data gzip
+      #|
+      #|Files (2):
+      #|  -rwxr-xr-x  root/root         37  /usr/bin/hello
+      #|  lrwxrwxrwx  root/root          0  /usr/bin/hi -> hello
+      #|
+    ),
+  )
+}
+
+///|
+test "inspect and verify need exactly one existing file" {
+  assert_eq(run(["inspect"]), 1)
+  assert_eq(run(["inspect", "a", "b"]), 1)
+  assert_eq(run(["inspect", "does-not-exist.deb"]), 1)
+  assert_eq(run(["verify"]), 1)
+  assert_eq(run(["verify", "does-not-exist.deb"]), 1)
 }
