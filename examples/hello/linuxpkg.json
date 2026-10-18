@@ -1,0 +1,24 @@
+{
+  "name": "hello",
+  "version": "1.0.0",
+  "release": "1",
+  "arch": "all",
+  "maintainer": "pxgt <133531533+pxgt@users.noreply.github.com>",
+  "description": "Example program packaged with linuxpkg\nPrints a greeting. It exists to show how a linuxpkg.json\nmaps files, a configuration file, a symbolic link, a directory\nand maintainer scripts onto a Debian or RPM package.",
+  "homepage": "https://github.com/pxgt/linuxpkg",
+  "license": "Apache-2.0",
+  "section": "utils",
+  "priority": "optional",
+  "mtime": 1700000000,
+  "contents": [
+    { "src": "hello.sh", "dst": "/usr/bin/hello", "mode": "0755" },
+    { "src": "hello", "dst": "/usr/bin/hi", "type": "symlink" },
+    { "src": "hello.conf", "dst": "/etc/hello.conf", "type": "config" },
+    { "dst": "/var/lib/hello", "type": "dir", "mode": "0755" },
+    { "src": "README.txt", "dst": "/usr/share/doc/hello/README.txt" }
+  ],
+  "scripts": {
+    "postinstall": "scripts/postinst.sh",
+    "postremove": "scripts/postrm.sh"
+  }
+}
