@@ -2,6 +2,7 @@ import {
   "Xpeng/linuxpkg/spec",
   "Xpeng/linuxpkg/archive/tar",
   "Xpeng/linuxpkg/archive/ar",
+  "Xpeng/linuxpkg/internal/gunzip",
   "moonbit-community/flate/gzip",
   "moonbitlang/x/crypto",
   "moonbitlang/core/encoding/utf8",

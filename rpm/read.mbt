@@ -197,9 +197,14 @@ fn RpmPackage::raw_payload(
   }
   let raw = match self.compressor() {
     "gzip" =>
-      @gzip.decompress(self.payload) catch {
-        @gzip.GzipError::GzipError(_, message) =>
+      @gunzip.decompress(self.payload, max_size=max_unpacked) catch {
+        Corrupt(message) =>
           raise RpmError::Corrupt(offset=-1, message="payload: \{message}")
+        TooLarge(_) =>
+          raise RpmError::Corrupt(
+            offset=-1,
+            message="payload unpacks to more than \{max_unpacked} bytes",
+          )
       }
     "identity" | "" => self.payload
     other =>

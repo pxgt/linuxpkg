@@ -56,16 +56,14 @@ fn unpack(
   if compression == "none" {
     return part.data
   }
-  let data = @gzip.decompress(part.data) catch {
-    @gzip.GzipError::GzipError(_, message) =>
+  @gunzip.decompress(part.data, max_size=max_unpacked) catch {
+    Corrupt(message) =>
       raise DebError::Corrupt(message="\{part.name}: \{message}")
+    TooLarge(_) =>
+      raise DebError::Corrupt(
+        message="\{part.name} unpacks to more than \{max_unpacked} bytes",
+      )
   }
-  if data.length() > max_unpacked {
-    raise DebError::Corrupt(
-      message="\{part.name} unpacks to more than \{max_unpacked} bytes",
-    )
-  }
-  data
 }
 
 ///|

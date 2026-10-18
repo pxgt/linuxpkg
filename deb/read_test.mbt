@@ -314,7 +314,7 @@ test "structural problems" {
         ("data.tar.gz", b""),
       ]),
     ),
-    content="corrupt deb: control.tar.gz: gzip: input too short",
+    content="corrupt deb: control.tar.gz: gzip: truncated",
   )
 }
 
