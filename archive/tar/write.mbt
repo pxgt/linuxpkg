@@ -289,6 +289,16 @@ fn write_entry(
       check_text("link target", link, 1 << 20, false)
       (b'2', link, b"")
     }
+    Hardlink(target) => {
+      let link = @utf8.encode(target)
+      check_text("link target", link, 1 << 20, false)
+      (b'1', link, b"")
+    }
+    Special(_) =>
+      raise TarError::Invalid(
+        field="kind",
+        message="special files cannot be written",
+      )
   }
   let mut name_overflows = false
   let (prefix, short_name) = if name.length() <= NAME_SIZE {
