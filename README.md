@@ -50,7 +50,14 @@ moon add Xpeng/linuxpkg
 然后在 `moon.pkg` 里按需导入子包：`Xpeng/linuxpkg/spec`（包模型与配置）、`Xpeng/linuxpkg/deb`、`Xpeng/linuxpkg/rpm`、
 `Xpeng/linuxpkg/archive/tar`、`Xpeng/linuxpkg/archive/ar`、`Xpeng/linuxpkg/archive/cpio`。核心库不碰文件系统，可在所有后端运行。
 
-命令行程序从源码构建：
+不安装，直接运行已发布的命令行程序（`moonx` 会下载预编译的 wasm 版本，文件路径请用绝对路径）：
+
+```sh
+moonx Xpeng/linuxpkg/cmd/main@0.1.0 inspect /绝对路径/hello_1.0.0-1_all.deb
+moonx Xpeng/linuxpkg/cmd/main@0.1.0 verify /绝对路径/hello-1.0.0-1.noarch.rpm
+```
+
+命令行程序也可以从源码构建：
 
 ```sh
 git clone https://github.com/pxgt/linuxpkg
