@@ -15,8 +15,8 @@ const USAGE : String =
   #|
   #|Usage:
   #|  linuxpkg build <config.json> [--format deb|rpm|all] [--out DIR]
-  #|  linuxpkg inspect <file.deb> [--json]
-  #|  linuxpkg verify <file.deb>
+  #|  linuxpkg inspect <file.deb|file.rpm> [--json]
+  #|  linuxpkg verify <file.deb|file.rpm>
   #|  linuxpkg init [PATH] [--force]
   #|  linuxpkg --version
   #|
