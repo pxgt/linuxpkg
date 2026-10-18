@@ -1,0 +1,48 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Xpeng/linuxpkg/rpm"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub(all) suberror RpmError {
+  Invalid(field~ : String, message~ : String)
+  Corrupt(offset~ : Int, message~ : String)
+  Unsupported(message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for RpmError
+
+// Types and methods
+pub(all) struct Header {
+  region : Int?
+  tags : Array[Tag]
+} derive(Eq, @debug.Debug)
+pub fn Header::decode(BytesView, Int) -> (Self, Int) raise RpmError
+pub fn Header::encode(Self) -> Bytes raise RpmError
+pub fn Header::get(Self, Int) -> Value?
+pub fn Header::ints(Self, Int) -> Array[Int]
+pub fn Header::string(Self, Int) -> String?
+pub fn Header::strings(Self, Int) -> Array[String]
+
+pub(all) struct Tag {
+  id : Int
+  value : Value
+} derive(Eq, @debug.Debug)
+
+pub(all) enum Value {
+  Int8(Array[Int])
+  Int16(Array[Int])
+  Int32(Array[Int])
+  Int64(Array[Int64])
+  Str(String)
+  Bin(Bytes)
+  StrArray(Array[String])
+  I18n(Array[String])
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
