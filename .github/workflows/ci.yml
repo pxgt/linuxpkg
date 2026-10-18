@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify (all backends)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Record toolchain
+        run: moon version --all
+
+      - name: Update package registry
+        run: moon update
+
+      - name: Check formatting
+        run: moon fmt --check
+
+      - name: Generate and verify public interfaces
+        run: |
+          moon info --target all
+          git diff --exit-code
+
+      - name: Check every backend without warnings
+        run: moon check --target all --deny-warn
+
+      - name: Build every backend
+        run: moon build --target all
+
+      - name: Test every backend
+        run: moon test --target all
+
+      - name: Verify package artifact
+        run: moon package --frozen
+
+      - name: Reject generated or formatting drift
+        run: git diff --exit-code

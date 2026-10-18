@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.deb binary
+*.rpm binary
+*.gz binary
+*.cpio binary
+*.tar binary
+*.ar binary
