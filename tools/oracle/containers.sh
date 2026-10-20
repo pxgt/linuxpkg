@@ -81,9 +81,9 @@ run_rpm() { # image
   step "$image: dnf install of the xz and zstd files"
   docker run --rm -v "$WORK/pkgs:/pkgs:ro" "$image" bash -ec '
     for c in xz zstd; do
-      dnf install -y /pkgs/$c/hello-1.0.0-1.noarch.rpm
+      dnf install -y --disablerepo="*" /pkgs/$c/hello-1.0.0-1.noarch.rpm
       test "$(hello)" = "hello from linuxpkg"
-      dnf remove -y hello
+      dnf remove -y --disablerepo="*" hello
       test ! -e /usr/bin/hello
     done
   '
@@ -143,13 +143,23 @@ real_deb() { # image expected-compression
   docker run --rm -v "$dir:/out" "$image" sh -c 'rm -rf /out/*'
 }
 
-real_rpm() { # image package
-  local image="$1" pkg="$2"
+real_rpm() { # image package [url]
+  # With a URL the package is downloaded here, on the host: dnf in the
+  # openEuler image needs many minutes to load its repository metadata.
+  local image="$1" pkg="$2" url="${3:-}"
   step "$image: linuxpkg reads and verifies the distribution's own $pkg rpm"
   local dir="$WORK/real-$(echo "$image" | tr ':/' '__')"
   mkdir -p "$dir"
+  local fetch='dnf download --destdir /out '"$pkg"' || { dnf install -y dnf-plugins-core && dnf download --destdir /out '"$pkg"'; }'
+  if [ -n "$url" ]; then
+    if ! curl -fsSL --retry 3 -m 300 -o "$dir/$(basename "$url")" "$url"; then
+      echo "NOTE: could not download $url, this check is skipped"
+      return 0
+    fi
+    fetch=':'
+  fi
   docker run --rm -v "$dir:/out" "$image" bash -ec '
-    dnf download --destdir /out '"$pkg"' || { dnf install -y dnf-plugins-core && dnf download --destdir /out '"$pkg"'; }
+    '"$fetch"'
     f=$(ls /out/'"$pkg"'-*.rpm | head -n 1)
     {
       rpm -qp --qf "name=%{NAME}\nversion=%{VERSION}\nrelease=%{RELEASE}\narch=%{ARCH}\ncompressor=%{PAYLOADCOMPRESSOR}\n" "$f"
@@ -206,7 +216,7 @@ real_rpm fedora:41 hello
 OPENEULER="openeuler/openeuler:24.03-lts"
 if docker pull "$OPENEULER" >/dev/null 2>&1; then
   run_rpm "$OPENEULER"
-  real_rpm "$OPENEULER" tree
+  real_rpm "$OPENEULER" tree "https://repo.openeuler.org/openEuler-24.03-LTS/everything/x86_64/Packages/tree-2.1.1-1.oe2403.x86_64.rpm"
 else
   echo "NOTE: $OPENEULER could not be pulled, using rockylinux:9 as the RPM-family substitute"
   run_rpm rockylinux:9
