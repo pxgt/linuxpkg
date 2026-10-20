@@ -18,33 +18,33 @@ pub fn read(BytesView) -> RpmPackage raise RpmError
 // Errors
 pub(all) suberror RpmError {
   Invalid(field~ : String, message~ : String)
-  Corrupt(offset~ : Int, message~ : String)
+  Corrupt(offset~ : Int32, message~ : String)
   Unsupported(message~ : String)
 } derive(Eq, @debug.Debug)
 pub impl Show for RpmError
 
 // Types and methods
 pub(all) struct Header {
-  region : Int?
+  region : Int32?
   tags : Array[Tag]
 } derive(Eq, @debug.Debug)
-pub fn Header::decode(BytesView, Int) -> (Self, Int) raise RpmError
+pub fn Header::decode(BytesView, Int32) -> (Self, Int32) raise RpmError
 pub fn Header::encode(Self) -> Bytes raise RpmError
-pub fn Header::get(Self, Int) -> Value?
-pub fn Header::ints(Self, Int) -> Array[Int]
-pub fn Header::string(Self, Int) -> String?
-pub fn Header::strings(Self, Int) -> Array[String]
+pub fn Header::get(Self, Int32) -> Value?
+pub fn Header::ints(Self, Int32) -> Array[Int32]
+pub fn Header::string(Self, Int32) -> String?
+pub fn Header::strings(Self, Int32) -> Array[String]
 
 pub(all) struct RpmFile {
   path : String
-  mode : Int
+  mode : Int32
   size : Int64
   mtime : Int64
   digest : String
   link : String
   owner : String
   group : String
-  flags : Int
+  flags : Int32
 } derive(Eq, @debug.Debug)
 
 pub(all) struct RpmPackage {
@@ -56,19 +56,19 @@ pub(all) struct RpmPackage {
 } derive(Eq, @debug.Debug)
 pub fn RpmPackage::compressor(Self) -> String
 pub fn RpmPackage::files(Self) -> Array[RpmFile] raise RpmError
-pub fn RpmPackage::payload_entries(Self, max_unpacked? : Int) -> Array[@cpio.Entry] raise RpmError
+pub fn RpmPackage::payload_entries(Self, max_unpacked? : Int32) -> Array[@cpio.Entry] raise RpmError
 pub fn RpmPackage::to_json(Self) -> Json raise RpmError
 pub fn RpmPackage::verify(Self) -> Array[String] raise RpmError
 
 pub(all) struct Tag {
-  id : Int
+  id : Int32
   value : Value
 } derive(Eq, @debug.Debug)
 
 pub(all) enum Value {
-  Int8(Array[Int])
-  Int16(Array[Int])
-  Int32(Array[Int])
+  Int8(Array[Int32])
+  Int16(Array[Int32])
+  Int32(Array[Int32])
   Int64(Array[Int64])
   Str(String)
   Bin(Bytes)

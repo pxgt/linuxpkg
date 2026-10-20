@@ -21,7 +21,7 @@ pub fn parse_control(String) -> Array[(String, String)] raise DebError
 
 pub fn parse_md5sums(String) -> Array[(String, String)] raise DebError
 
-pub fn read(BytesView, max_unpacked? : Int) -> DebPackage raise DebError
+pub fn read(BytesView, max_unpacked? : Int32) -> DebPackage raise DebError
 
 pub fn version_string(@spec.PackageSpec) -> String
 

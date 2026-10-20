@@ -8,14 +8,14 @@ import {
 // Values
 pub fn compress(BytesView, Compression) -> Bytes raise CompressError
 
-pub fn decompress(BytesView, Compression, max_size? : Int) -> Bytes raise CompressError
+pub fn decompress(BytesView, Compression, max_size? : Int32) -> Bytes raise CompressError
 
 pub fn detect(BytesView) -> Compression
 
 // Errors
 pub(all) suberror CompressError {
   Corrupt(String)
-  TooLarge(Int)
+  TooLarge(Int32)
   Unsupported(String)
 } derive(Eq, @debug.Debug)
 pub impl Show for CompressError

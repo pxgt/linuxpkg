@@ -8,12 +8,12 @@ import {
 // Values
 pub fn build(Array[Member]) -> Bytes raise ArError
 
-pub fn parse(BytesView, max_members? : Int) -> Array[Member] raise ArError
+pub fn parse(BytesView, max_members? : Int32) -> Array[Member] raise ArError
 
 // Errors
 pub(all) suberror ArError {
   Invalid(field~ : String, message~ : String)
-  Corrupt(offset~ : Int, message~ : String)
+  Corrupt(offset~ : Int32, message~ : String)
 } derive(Eq, @debug.Debug)
 pub impl Show for ArError
 
@@ -22,11 +22,11 @@ pub(all) struct Member {
   name : String
   data : Bytes
   mtime : Int64
-  uid : Int
-  gid : Int
-  mode : Int
+  uid : Int32
+  gid : Int32
+  mode : Int32
 } derive(Eq, @debug.Debug)
-pub fn Member::new(String, Bytes, mtime? : Int64, uid? : Int, gid? : Int, mode? : Int) -> Self
+pub fn Member::new(String, Bytes, mtime? : Int64, uid? : Int32, gid? : Int32, mode? : Int32) -> Self
 
 // Type aliases
 

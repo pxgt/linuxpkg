@@ -8,12 +8,12 @@ import {
 // Values
 pub fn build(Array[Entry], long_names? : LongNames) -> Bytes raise TarError
 
-pub fn parse(BytesView, max_entries? : Int) -> Array[Entry] raise TarError
+pub fn parse(BytesView, max_entries? : Int32) -> Array[Entry] raise TarError
 
 // Errors
 pub(all) suberror TarError {
   Invalid(field~ : String, message~ : String)
-  Corrupt(offset~ : Int, message~ : String)
+  Corrupt(offset~ : Int32, message~ : String)
   Unsupported(message~ : String)
 } derive(Eq, @debug.Debug)
 pub impl Show for TarError
@@ -22,23 +22,23 @@ pub impl Show for TarError
 pub(all) struct Entry {
   path : String
   kind : EntryKind
-  mode : Int
-  uid : Int
-  gid : Int
+  mode : Int32
+  uid : Int32
+  gid : Int32
   uname : String
   gname : String
   mtime : Int64
 } derive(Eq, @debug.Debug)
-pub fn Entry::dir(String, mode? : Int, uid? : Int, gid? : Int, uname? : String, gname? : String, mtime? : Int64) -> Self
-pub fn Entry::file(String, Bytes, mode? : Int, uid? : Int, gid? : Int, uname? : String, gname? : String, mtime? : Int64) -> Self
-pub fn Entry::symlink(String, String, uid? : Int, gid? : Int, uname? : String, gname? : String, mtime? : Int64) -> Self
+pub fn Entry::dir(String, mode? : Int32, uid? : Int32, gid? : Int32, uname? : String, gname? : String, mtime? : Int64) -> Self
+pub fn Entry::file(String, Bytes, mode? : Int32, uid? : Int32, gid? : Int32, uname? : String, gname? : String, mtime? : Int64) -> Self
+pub fn Entry::symlink(String, String, uid? : Int32, gid? : Int32, uname? : String, gname? : String, mtime? : Int64) -> Self
 
 pub(all) enum EntryKind {
   File(Bytes)
   Dir
   Symlink(String)
   Hardlink(String)
-  Special(Int)
+  Special(Int32)
 } derive(Eq, @debug.Debug)
 
 pub(all) enum LongNames {

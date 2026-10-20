@@ -8,12 +8,12 @@ import {
 // Values
 pub fn build(Array[Entry]) -> Bytes raise CpioError
 
-pub fn parse(BytesView, max_entries? : Int) -> Array[Entry] raise CpioError
+pub fn parse(BytesView, max_entries? : Int32) -> Array[Entry] raise CpioError
 
 // Errors
 pub(all) suberror CpioError {
   Invalid(field~ : String, message~ : String)
-  Corrupt(offset~ : Int, message~ : String)
+  Corrupt(offset~ : Int32, message~ : String)
 } derive(Eq, @debug.Debug)
 pub impl Show for CpioError
 
@@ -21,20 +21,20 @@ pub impl Show for CpioError
 pub(all) struct Entry {
   path : String
   data : Bytes
-  mode : Int
-  uid : Int
-  gid : Int
-  nlink : Int
+  mode : Int32
+  uid : Int32
+  gid : Int32
+  nlink : Int32
   mtime : Int64
-  ino : Int
-  dev_major : Int
-  dev_minor : Int
-  rdev_major : Int
-  rdev_minor : Int
+  ino : Int32
+  dev_major : Int32
+  dev_minor : Int32
+  rdev_major : Int32
+  rdev_minor : Int32
 } derive(Eq, @debug.Debug)
-pub fn Entry::dir(String, mode? : Int, uid? : Int, gid? : Int, mtime? : Int64, ino? : Int) -> Self
-pub fn Entry::file(String, Bytes, mode? : Int, uid? : Int, gid? : Int, mtime? : Int64, ino? : Int) -> Self
-pub fn Entry::symlink(String, String, uid? : Int, gid? : Int, mtime? : Int64, ino? : Int) -> Self
+pub fn Entry::dir(String, mode? : Int32, uid? : Int32, gid? : Int32, mtime? : Int64, ino? : Int32) -> Self
+pub fn Entry::file(String, Bytes, mode? : Int32, uid? : Int32, gid? : Int32, mtime? : Int64, ino? : Int32) -> Self
+pub fn Entry::symlink(String, String, uid? : Int32, gid? : Int32, mtime? : Int64, ino? : Int32) -> Self
 
 // Type aliases
 

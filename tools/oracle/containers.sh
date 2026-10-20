@@ -138,8 +138,6 @@ real_deb() { # image expected-compression
       echo "files=$(dpkg-deb --contents "$f" | wc -l)"
     } > /out/expected.txt
     dpkg-deb --contents "$f" | sed "s/ -> .*//" | awk "{print \$6}" > /out/files.txt
-    ar t "$f" > /out/members.txt
-    cat /out/members.txt
   '
   compare_real "$image hello" "$expected" "$dir" "$(ls "$dir"/hello_*.deb | head -n 1)"
   docker run --rm -v "$dir:/out" "$image" sh -c 'rm -rf /out/*'
