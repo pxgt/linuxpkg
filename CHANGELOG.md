@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-20
+
 ### Changed
 
 - xz packages are now written with `lin2077-zeming/moonxz` (level 9) instead of `lzma-mbt`: the output is smaller than
