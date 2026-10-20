@@ -52,7 +52,9 @@ The script checks, in order:
    fields and values as `apt-ftparchive packages .`, `apt-get update` accepts it and `apt-get install` resolves a
    dependency through it. For rpms, `filelists.xml` and `other.xml` are compared with `createrepo_c`, and `primary.xml`
    too (apart from createrepo_c condensing `libc.so.6(GLIBC_*)` requirements).
-9. **Compression**: the example is built with `--compression xz|zstd|none`; `dpkg-deb` lists, extracts and checks md5sums,
+9. **Arch Linux**: `bsdtar` (libarchive, the reader behind pacman) lists, extracts and agrees with our `.MTREE` on every
+   entry (type, mode, size, SHA-256, link) for each compression; `.PKGINFO` and `.INSTALL` are checked.
+10. **Compression**: the example is built with `--compression xz|zstd|none`; `dpkg-deb` lists, extracts and checks md5sums,
    `dpkg -i`, `dpkg --verify` and `dpkg -P` pass; `rpm -K` and `Payload SHA256 digest: OK`, the `rpmlib(PayloadIsXz)` /
    `rpmlib(PayloadIsZstd)` requirements in `rpm -qp --requires`, `rpm2cpio | cpio`, a private-root install and `rpm -V`
    pass. A configuration with `"compression": "xz"` and `"rpm": {"compression": "zstd"}` is checked too.
@@ -67,6 +69,11 @@ Installs the deb in `debian:12` and `ubuntu:24.04` and the rpm (`rpm -ivh` and `
 `openeuler/openeuler:24.03-lts` (falling back to `rockylinux:9` if that image cannot be pulled), once for each of
 gzip, xz, zstd and no compression. Inside each container it runs the program, checks the maintainer script marker,
 runs `dpkg --verify` / `rpm -V`, removes the package and checks the removal.
+
+In `archlinux:latest` it runs `pacman -U` on the hello package of every compression, runs the program and the
+`.INSTALL` scripts, and checks `pacman -Q`, `-Qi`, `-Ql`, `-Qo`, `pacman -Qkk` (no altered files) and `pacman -R`. For the
+reverse direction it downloads `which` and `tree` with `pacman -Sw` and builds a package with the real `makepkg`, then
+compares `inspect --json` with `pacman -Qip` / `-Qlp` and runs `verify` (exit 0) on each.
 
 It also builds a repository from a hello package and a package depending on it, and installs the dependent package
 with the container's own tools: `apt-get install` in `debian:12` and `ubuntu:24.04` (with `[trusted=yes]`), and

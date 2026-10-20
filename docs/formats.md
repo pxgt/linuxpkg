@@ -86,6 +86,35 @@ signature (`1f 8b`, `fd 37 7a 58 5a 00`, `28 b5 2f fd`, plausible `.lzma` header
 - Reading: gzip, xz, zstd, lzma and uncompressed members, in any combination (the control and data archive may
   differ). bzip2 members and unknown suffixes are reported as `Unsupported`, never as corruption.
 
+## Arch Linux package (`.pkg.tar.zst`)
+
+- A tar archive (compressed with zstd like makepkg, or xz, gzip or not at all; file name
+  `name-[epoch:]version-release-arch.pkg.tar[.zst|.xz|.gz]`). pacman and libarchive detect the compression from the data.
+- Entries in this order: `.INSTALL` (only with maintainer scripts), `.MTREE`, `.PKGINFO`, then the files with paths
+  relative to `/` (`usr/bin/hello`), sorted by path, every parent directory present with a trailing slash. Hard links
+  and special files are not written.
+- `.PKGINFO`, key order as in makepkg: `pkgname`, `pkgbase`, `xdata = pkgtype=pkg`, `pkgver` (`[epoch:]version-release`),
+  `pkgdesc` (first line of the description), `url`, `builddate`, `packager`, `size` (bytes of regular files), `arch`,
+  `license`, `replaces`, `conflict`, `provides`, `backup` (configuration files without the leading `/`), `depend`, `optdepend`.
+- `.MTREE`: gzip-compressed mtree v2 text, `/set type=file uid=0 gid=0 mode=644`, then one line per entry with `time`,
+  `mode` (when it is not 644), `size` and `sha256digest` for files, `type=dir`, or `type=link link=...`; bytes that mtree
+  cannot carry in a path are written as `\ooo`. It covers `.PKGINFO` and `.INSTALL` but not itself. `pacman -Qkk` and
+  `linuxpkg verify` compare the installed or unpacked files with it.
+- `.INSTALL`: bash functions `pre_install`, `post_install`, `pre_remove`, `post_remove` holding the scripts without their
+  `#!` line, plus `pre_upgrade` / `post_upgrade` that call the install ones (a deb or an rpm runs its install scripts on
+  upgrades too).
+- Mapping: `depends` → `depend`; `recommends` and `suggests` → `optdepend` (pacman has one kind of weak dependency);
+  `conflicts` → `conflict`; `replaces` → `replaces`; `provides` → `provides` (only `=` is allowed there); relations are
+  written without spaces (`glibc>=2.31`). `config` files → `backup`.
+- Architectures: `amd64` → `x86_64`, `arm64` → `aarch64`, `i386` → `i686`, `armhf` → `armv7h`, `ppc64le` →
+  `powerpc64le`, `riscv64`, `loong64`, `all` → `any`. `armel`, `s390x` and `mips64le` have no Arch Linux port and are
+  rejected. The release must be a number such as `1` or `1.1` (pkgrel), the version must not contain a hyphen.
+- Not written: `.BUILDINFO` (makepkg's record of the build environment; pacman does not need it), `.CHANGELOG`, signatures.
+  Reading accepts all of them. Owners other than root are written as names in the tar, while `.MTREE` records numeric
+  ids 0, so `pacman -Qkk` may report a uid/gid difference for such files.
+- Reading: the package is unpacked with a size limit like the others; `verify` checks every `.MTREE` line (type, mode,
+  size, SHA-256, link target), that no file is missing from or extra to the list, and the safety of the paths.
+
 ## cpio (payload of an rpm)
 
 - `newc` (`070701`): 110-byte header of 13 eight-digit hex fields, NUL terminated name, header and data padded to

@@ -152,7 +152,7 @@ test "malformed input is rejected with the field name" {
   )
   inspect(
     config_error(with_extra("\"colour\": \"red\"")),
-    content="colour: unknown field, expected one of: name, version, release, epoch, arch, maintainer, description, homepage, license, vendor, section, priority, depends, recommends, suggests, conflicts, replaces, provides, mtime, contents, scripts, compression, deb, rpm",
+    content="colour: unknown field, expected one of: name, version, release, epoch, arch, maintainer, description, homepage, license, vendor, section, priority, depends, recommends, suggests, conflicts, replaces, provides, mtime, contents, scripts, compression, deb, rpm, pacman",
   )
 }
 
@@ -360,6 +360,17 @@ test "compression: defaults, package-wide and per format" {
   )
   assert_eq(only_rpm.deb_compression(), Gzip)
   assert_eq(only_rpm.rpm_compression(), Gzip)
+  // Arch Linux packages default to zstd, like makepkg.
+  assert_eq(none.arch_compression(), Zstd)
+  assert_eq(wide.arch_compression(), Zstd)
+  assert_eq(mixed.arch_compression(), Xz)
+  let own = @spec.Config::parse(
+    with_extra(
+      "\"compression\": \"xz\", \"pacman\": {\"compression\": \"gzip\"}",
+    ),
+  )
+  assert_eq(own.arch_compression(), Gzip)
+  assert_eq(own.deb_compression(), Xz)
 }
 
 ///|

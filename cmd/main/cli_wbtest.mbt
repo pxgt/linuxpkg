@@ -277,3 +277,53 @@ test "repo writes apt and dnf metadata that the checks accept" {
   @fs.remove_file(dir + "/tool.sh")
   @fs.remove_dir(dir)
 }
+
+///|
+test "arch builds, inspects and verifies an Arch Linux package" {
+  let dir = "cli_arch_tmp"
+  ensure_dir(dir)
+  write_bytes(dir + "/linuxpkg.json", @utf8.encode(CONFIG_JSON))
+  write_bytes(dir + "/tool.sh", b"#!/bin/sh\necho hi\n")
+  let config = dir + "/linuxpkg.json"
+  // Only the Arch Linux package; the config asks for xz package-wide.
+  assert_eq(run(["build", config, "--format", "arch", "--out", dir + "/a"]), 0)
+  let target = dir + "/a/tinytool-1.0-1-any.pkg.tar.xz"
+  assert_true(@fs.path_exists(target))
+  assert_eq(run(["verify", target]), 0)
+  assert_eq(run(["inspect", target]), 0)
+  assert_eq(run(["inspect", target, "--json"]), 0)
+  assert_eq(@arch.read(read_bytes(target)).compression, "xz")
+  // `all` adds it to the deb and the rpm; --compression wins.
+  assert_eq(run(["build", config, "-z", "gzip", "--out", dir + "/b"]), 0)
+  assert_eq(@fs.read_dir(dir + "/b").length(), 3)
+  assert_true(@fs.path_exists(dir + "/b/tinytool-1.0-1-any.pkg.tar.gz"))
+  // An architecture without an Arch Linux port is skipped by `all`, and an
+  // error for `--format arch`.
+  let s390 = CONFIG_JSON.replace(
+    old="\"arch\": \"all\"",
+    new="\"arch\": \"s390x\"",
+  )
+  write_bytes(dir + "/s390.json", @utf8.encode(s390))
+  assert_eq(run(["build", dir + "/s390.json", "--out", dir + "/c"]), 0)
+  assert_eq(@fs.read_dir(dir + "/c").length(), 2)
+  assert_eq(
+    run(["build", dir + "/s390.json", "--format", "arch", "--out", dir + "/c"]),
+    1,
+  )
+  // A damaged package is a mismatch, something else is not a package.
+  let data = read_bytes(target)
+  write_bytes(dir + "/broken.pkg.tar.xz", data[0:data.length() / 2].to_owned())
+  assert_eq(run(["verify", dir + "/broken.pkg.tar.xz"]), 2)
+  write_bytes(dir + "/plain.txt", b"just text")
+  assert_eq(run(["verify", dir + "/plain.txt"]), 1)
+  for sub in ["a", "b", "c"] {
+    for name in @fs.read_dir(dir + "/" + sub) {
+      @fs.remove_file(dir + "/" + sub + "/" + name)
+    }
+    @fs.remove_dir(dir + "/" + sub)
+  }
+  for name in @fs.read_dir(dir) {
+    @fs.remove_file(dir + "/" + name)
+  }
+  @fs.remove_dir(dir)
+}

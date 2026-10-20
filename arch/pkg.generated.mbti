@@ -1,0 +1,53 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Xpeng/linuxpkg/arch"
+
+import {
+  "Xpeng/linuxpkg/archive/tar",
+  "Xpeng/linuxpkg/compress",
+  "Xpeng/linuxpkg/spec",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn build(@spec.PackageSpec, compression? : @compress.Compression) -> Bytes raise ArchError
+
+pub fn file_name(@spec.PackageSpec, compression? : @compress.Compression) -> String
+
+pub fn parse_mtree(String) -> Array[MtreeEntry] raise ArchError
+
+pub fn read(BytesView, max_unpacked? : Int32) -> ArchPackage raise ArchError
+
+// Errors
+pub(all) suberror ArchError {
+  Invalid(field~ : String, message~ : String)
+  Corrupt(message~ : String)
+  Unsupported(message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for ArchError
+
+// Types and methods
+pub(all) struct ArchPackage {
+  compression : String
+  pkginfo : Array[(String, String)]
+  install : String?
+  mtree : Array[MtreeEntry]?
+  entries : Array[@tar.Entry]
+} derive(Eq, @debug.Debug)
+pub fn ArchPackage::checked_files(Self) -> Int32
+pub fn ArchPackage::field(Self, String) -> String?
+pub fn ArchPackage::fields(Self, String) -> Array[String]
+pub fn ArchPackage::to_json(Self) -> Json
+pub fn ArchPackage::verify(Self) -> Array[String]
+
+pub(all) struct MtreeEntry {
+  path : String
+  kind : String
+  mode : Int32?
+  size : Int64?
+  sha256 : String?
+  link : String?
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits

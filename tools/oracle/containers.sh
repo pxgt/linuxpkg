@@ -279,9 +279,125 @@ REPO
   '
 }
 
+# ---- Arch Linux: pacman installs the packages, makepkg and the mirrors give references
+arch_check() {
+  step "archlinux:latest: pacman -U, -Qkk, -R for ${COMPRESSIONS}"
+  docker run --rm -v "$WORK/pkgs:/pkgs:ro" archlinux:latest bash -ec '
+    # The image does not extract documentation, which would show up as missing files.
+    sed -i "/^NoExtract/d" /etc/pacman.conf
+    for c in '"$COMPRESSIONS"'; do
+      echo "-- $c"
+      f=$(ls /pkgs/$c/hello-1.0.0-1-any.pkg.tar*)
+      pacman -U --noconfirm "$f"
+      test "$(hello)" = "hello from linuxpkg"
+      test "$(hi)" = "hello from linuxpkg"
+      test "$(cat /var/lib/hello/state)" = installed
+      test -f /etc/hello.conf
+      test "$(pacman -Q hello)" = "hello 1.0.0-1"
+      pacman -Qi hello | tee /tmp/qi.txt
+      grep -qi "^Architecture *: any" /tmp/qi.txt
+      grep -q "^Licenses *: Apache-2.0" /tmp/qi.txt
+      grep -q "^URL *: https://github.com/pxgt/linuxpkg" /tmp/qi.txt
+      pacman -Ql hello
+      pacman -Qkk hello | tee /tmp/qkk.txt
+      grep -q " 0 altered files" /tmp/qkk.txt
+      pacman -Qo /usr/bin/hello
+      pacman -R --noconfirm hello
+      test ! -e /usr/bin/hello
+      test ! -e /var/lib/hello/state
+    done
+    echo "pacman check passed on $(. /etc/os-release && echo "$PRETTY_NAME")"
+  '
+}
+
+arch_real() {
+  step "archlinux:latest: linuxpkg reads and verifies packages made by makepkg and by Arch's build servers"
+  local dir="$WORK/real-arch"
+  mkdir -p "$dir"
+  docker run --rm -v "$dir:/out" -v "$ROOT/examples/hello:/hello:ro" archlinux:latest bash -ec '
+    # Docker hosts without Landlock cannot run pacman 7 with its download sandbox.
+    p() { pacman "$@" || pacman --disable-sandbox "$@"; }
+    p -Sy --noconfirm >/dev/null
+    p -Sw --noconfirm --cachedir /out which tree
+    p -S --noconfirm --needed fakeroot binutils file >/dev/null
+    useradd -m builder
+    mkdir -p /home/builder/pkg
+    cp -r /hello/. /home/builder/pkg/files
+    cat > /home/builder/pkg/PKGBUILD <<EOF
+pkgname=makepkg-hello
+pkgver=1.0
+pkgrel=1
+pkgdesc="Built by the real makepkg"
+arch=(any)
+options=(!strip !debug)
+url="https://example.org/makepkg-hello"
+license=(MIT)
+depends=(bash)
+optdepends=("less: pager")
+backup=(etc/makepkg-hello.conf)
+install=makepkg-hello.install
+package() {
+  install -Dm755 "\$srcdir/../files/hello.sh" "\$pkgdir/usr/bin/makepkg-hello"
+  install -Dm644 "\$srcdir/../files/hello.conf" "\$pkgdir/etc/makepkg-hello.conf"
+  ln -s makepkg-hello "\$pkgdir/usr/bin/mh"
+}
+EOF
+    printf "post_install() {\n  echo installed\n}\n" > /home/builder/pkg/makepkg-hello.install
+    chown -R builder /home/builder
+    su builder -c "cd /home/builder/pkg && makepkg -f --nodeps --skipinteg"
+    cp /home/builder/pkg/*.pkg.tar.zst /out/
+    cd /out
+    for f in which-*.pkg.tar.zst tree-*.pkg.tar.zst makepkg-hello-*.pkg.tar.zst; do
+      n=${f%%.pkg.tar.zst}
+      {
+        pacman -Qip "$f" | awk -F" *: " "/^Name|^Version|^Architecture/ {print tolower(\$1)\"=\"\$2}"
+        echo "files=$(pacman -Qlp "$f" | wc -l)"
+      } > "$n.expected"
+      pacman -Qlp "$f" | awk "{print \$2}" > "$n.files"
+    done
+    chmod a+rw /out/*
+  '
+  local f
+  for f in "$dir"/which-*.pkg.tar.zst "$dir"/tree-*.pkg.tar.zst "$dir"/makepkg-hello-*.pkg.tar.zst; do
+    "$BIN" inspect "$f"
+    "$BIN" inspect "$f" --json >"$dir/report.json"
+    python3 - "$dir/report.json" "${f%.pkg.tar.zst}.expected" "${f%.pkg.tar.zst}.files" <<'PY'
+import json, sys
+report = json.load(open(sys.argv[1]))
+expected = dict(line.split("=", 1) for line in open(sys.argv[2]).read().splitlines())
+files = sorted(l for l in open(sys.argv[3]).read().splitlines() if l)
+version = report["version"] + "-" + report["release"]
+if report["epoch"] is not None:
+    version = "%d:%s" % (report["epoch"], version)
+assert report["name"] == expected["name"], (report["name"], expected["name"])
+assert version == expected["version"], (version, expected["version"])
+assert report["architecture"].lower() == expected["architecture"].lower(), (report["architecture"], expected["architecture"])
+ours = sorted(f["path"] for f in report["files"])
+# pacman -Qlp lists directories with a trailing slash.
+theirs = sorted(p.rstrip("/") or "/" for p in files if not p.rsplit("/", 1)[-1].startswith(".") or True)
+theirs = [p for p in theirs if p not in ("/.PKGINFO", "/.MTREE", "/.BUILDINFO", "/.INSTALL")]
+assert ours == theirs, (ours, theirs)
+print("  ok: name, version, architecture and %d file names agree with pacman -Qip / -Qlp" % len(ours))
+PY
+    "$BIN" verify "$f" | tee "$dir/verify.out"
+    grep -q "OK (" "$dir/verify.out" || die "$f: verify did not report OK"
+    echo "  ok: $(basename "$f") verified in full (exit 0)"
+  done
+  # The package makepkg built installs and removes cleanly, with its .INSTALL.
+  docker run --rm -v "$dir:/out:ro" archlinux:latest bash -ec '
+    pacman -U --noconfirm /out/makepkg-hello-*.pkg.tar.zst
+    test -x /usr/bin/makepkg-hello
+    pacman -Qkk makepkg-hello
+    pacman -R --noconfirm makepkg-hello
+  '
+  docker run --rm -v "$dir:/out" archlinux:latest sh -c 'rm -rf /out/*'
+}
+
 run_deb debian:12
 run_deb ubuntu:24.04
 run_rpm fedora:41
+arch_check
+arch_real
 repo_deb debian:12
 repo_deb ubuntu:24.04
 repo_rpm fedora:41

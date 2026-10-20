@@ -52,8 +52,9 @@ jobs:
             for t in native wasm wasm-gc js; do
               moon run cmd/main --target "$t" -- build examples/hello/linuxpkg.json --compression "$c" --out "/tmp/cli-$t-$c"
             done
+            case "$c" in xz) ext=.xz ;; zstd) ext=.zst ;; gzip) ext=.gz ;; none) ext= ;; esac
             for t in wasm wasm-gc js; do
-              for f in hello_1.0.0-1_all.deb hello-1.0.0-1.noarch.rpm; do
+              for f in hello_1.0.0-1_all.deb hello-1.0.0-1.noarch.rpm "hello-1.0.0-1-any.pkg.tar$ext"; do
                 cmp "/tmp/cli-native-$c/$f" "/tmp/cli-$t-$c/$f"
               done
             done
@@ -84,7 +85,7 @@ jobs:
         run: moon update
 
       - name: Install the official packaging tools
-        run: sudo apt-get update && sudo apt-get install -y lintian rpm rpm2cpio cpio createrepo-c apt-utils xz-utils
+        run: sudo apt-get update && sudo apt-get install -y lintian rpm rpm2cpio cpio createrepo-c apt-utils xz-utils libarchive-tools zstd
 
       - name: Compare linuxpkg output with dpkg and friends
         run: tools/oracle/run.sh

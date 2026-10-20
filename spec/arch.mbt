@@ -83,3 +83,30 @@ pub fn Arch::rpm_name(self : Arch) -> String {
     All => "noarch"
   }
 }
+
+///|
+/// The name pacman uses (`CARCH`), for example `x86_64` or `any`. Returns
+/// `None` for architectures with no Arch Linux port (`armel`, `s390x`,
+/// `mips64le`).
+///
+/// # Example
+/// ```mbt check
+/// test {
+///   assert_eq(@spec.Arch::Amd64.pacman_name(), Some("x86_64"))
+///   assert_eq(@spec.Arch::All.pacman_name(), Some("any"))
+///   assert_eq(@spec.Arch::S390x.pacman_name(), None)
+/// }
+/// ```
+pub fn Arch::pacman_name(self : Arch) -> String? {
+  match self {
+    Amd64 => Some("x86_64")
+    Arm64 => Some("aarch64")
+    I386 => Some("i686")
+    Armhf => Some("armv7h")
+    Ppc64le => Some("powerpc64le")
+    Riscv64 => Some("riscv64")
+    Loong64 => Some("loong64")
+    All => Some("any")
+    Armel | S390x | Mips64le => None
+  }
+}

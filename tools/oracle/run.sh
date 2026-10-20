@@ -638,6 +638,80 @@ PY
   fi
 fi
 
+# ---------------------------------------------------------------- arch linux
+if command -v bsdtar >/dev/null 2>&1; then
+  step "arch: packages for pacman, read back with bsdtar (libarchive, pacman's own reader)"
+  AR="$WORK/arch"
+  mkdir -p "$AR"
+  for COMP in zstd xz gzip none; do
+    "$BIN" build "$EXAMPLE" --format arch --compression "$COMP" --out "$AR/$COMP" >/dev/null
+    PKG="$(ls "$AR/$COMP"/hello-1.0.0-1-any.pkg.tar*)"
+    LIST="$(bsdtar -tf "$PKG")"
+    expect_eq "$COMP: first entries" "$(printf '%s\n' "$LIST" | head -n 3 | tr '\n' ' ')" ".INSTALL .MTREE .PKGINFO "
+    expect_in "$COMP: program listed" "usr/bin/hello" "$LIST"
+    expect_in "$COMP: directories have a trailing slash" "usr/bin/" "$LIST"
+    "$BIN" verify "$PKG" >/dev/null
+    pass "$COMP: our verify accepts the package"
+  done
+  PKG="$(ls "$AR"/zstd/hello-1.0.0-1-any.pkg.tar*)"
+  if command -v zstd >/dev/null 2>&1; then zstd -t "$PKG" >/dev/null && pass "zstd -t accepts the package"; fi
+  mkdir "$AR/extract"
+  bsdtar -xpf "$PKG" -C "$AR/extract"
+  cmp "$AR/extract/usr/bin/hello" examples/hello/hello.sh
+  cmp "$AR/extract/etc/hello.conf" examples/hello/hello.conf
+  expect_eq "extracted symlink" "$(readlink "$AR/extract/usr/bin/hi")" "hello"
+  pass "bsdtar extracts files identical to the sources"
+  PKGINFO="$(bsdtar -xOf "$PKG" .PKGINFO)"
+  expect_in ".PKGINFO name" "pkgname = hello" "$PKGINFO"
+  expect_in ".PKGINFO version" "pkgver = 1.0.0-1" "$PKGINFO"
+  expect_in ".PKGINFO arch" "arch = any" "$PKGINFO"
+  expect_in ".PKGINFO backup" "backup = etc/hello.conf" "$PKGINFO"
+  expect_in ".PKGINFO license" "license = Apache-2.0" "$PKGINFO"
+  INSTALL="$(bsdtar -xOf "$PKG" .INSTALL)"
+  bash -n <(printf '%s\n' "$INSTALL") && pass ".INSTALL is valid bash"
+  expect_in ".INSTALL post_install" "post_install()" "$INSTALL"
+  expect_in ".INSTALL post_upgrade" "post_upgrade()" "$INSTALL"
+  # The .MTREE must say the same as bsdtar's own mtree of the extracted tree.
+  bsdtar -xOf "$PKG" .MTREE | gzip -dc >"$AR/ours.mtree"
+  (cd "$AR/extract" && bsdtar -cf - --format=mtree --options='!all,use-set,type,mode,size,sha256,link' .) >"$AR/ref.mtree"
+  python3 - "$AR/ours.mtree" "$AR/ref.mtree" <<'PY'
+import re, sys
+def parse(path):
+    defaults, out = {}, {}
+    for line in open(path, encoding="utf-8").read().splitlines():
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if parts[0] == "/set":
+            defaults.update(p.split("=", 1) for p in parts[1:])
+            continue
+        if parts[0] == "/unset":
+            for k in parts[1:]:
+                defaults.pop(k, None)
+            continue
+        name = re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), parts[0])
+        if name in (".", "./"):
+            continue
+        values = dict(defaults)
+        values.update(p.split("=", 1) for p in parts[1:] if "=" in p)
+        out[name] = {k: values.get(k) for k in ("type", "mode", "size", "sha256digest", "link")}
+    return out
+ours, ref = parse(sys.argv[1]), parse(sys.argv[2])
+# Ours lists .PKGINFO and .INSTALL, which bsdtar also sees in the extracted tree.
+missing = [n for n in ours if n not in ref]
+assert not missing, ("not found by bsdtar", missing)
+for name, values in ours.items():
+    want = ref[name]
+    # bsdtar leaves type=file out when it is the default.
+    for key in values:
+        got, exp = values[key], want[key]
+        if key == "type":
+            got, exp = got or "file", exp or "file"
+        assert got == exp, (name, key, got, exp)
+print("  ok: .MTREE agrees with bsdtar's mtree of the extracted tree on %d entries" % len(ours))
+PY
+fi
+
 # ---------------------------------------------------------------- self-hosting
 step "linuxpkg packages itself (examples/self)"
 SELF_TARGET="${TARGET_DIR:-$ROOT/_build}"

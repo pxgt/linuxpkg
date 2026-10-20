@@ -4,6 +4,7 @@ import {
   "Xpeng/linuxpkg/compress",
   "Xpeng/linuxpkg/deb",
   "Xpeng/linuxpkg/rpm",
+  "Xpeng/linuxpkg/arch",
   "Xpeng/linuxpkg/repo",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/env",
