@@ -2,6 +2,7 @@ import {
   "moonbit-community/flate/gzip",
   "Milky2018/zstd",
   "aurora0x27/lzma-mbt" @lzma,
+  "lin2077-zeming/moonxz/lib" @moonxz,
 }
 
 import {

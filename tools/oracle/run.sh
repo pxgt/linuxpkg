@@ -402,6 +402,13 @@ for COMP in xz zstd none; do
   CDEB="$OUTC/hello_1.0.0-1_all.deb"
   case "$COMP" in xz) EXT=.xz ;; zstd) EXT=.zst ;; none) EXT= ;; esac
   expect_eq "$COMP: ar members" "$(ar t "$CDEB" | tr '\n' ' ')" "debian-binary control.tar$EXT data.tar$EXT "
+  if [ "$COMP" = xz ]; then
+    # The reference xz must accept both members, integrity check included.
+    for MEMBER in control.tar.xz data.tar.xz; do
+      ar p "$CDEB" "$MEMBER" | xz -t || die "xz -t rejects $MEMBER"
+    done
+    pass "xz: xz -t accepts both members"
+  fi
   dpkg-deb --info "$CDEB" >/dev/null
   expect_eq "$COMP: dpkg-deb --field" "$(dpkg-deb --field "$CDEB" Package)" "hello"
   CONTENTS="$(dpkg-deb --contents "$CDEB")"

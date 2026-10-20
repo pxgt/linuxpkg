@@ -8,7 +8,8 @@ linuxpkg is licensed under the Apache License 2.0 (see `LICENSE`).
 |---|---|---|
 | [`moonbit-community/flate`](https://mooncakes.io/docs/moonbit-community/flate) | Apache-2.0 | gzip compression and decompression (`@gzip`) |
 | [`Milky2018/zstd`](https://mooncakes.io/docs/Milky2018/zstd) (repository `moonbit-community/zstd`) | Apache-2.0 | zstd compression and decompression (`@zstd`) for deb members and rpm payloads |
-| [`aurora0x27/lzma-mbt`](https://mooncakes.io/docs/aurora0x27/lzma-mbt) | Apache-2.0 | xz compression and decompression, and reading of `.lzma` files (`@lzma`) |
+| [`lin2077-zeming/moonxz`](https://mooncakes.io/docs/lin2077-zeming/moonxz) | Apache-2.0 | xz compression (`@moonxz`), because its encoder compresses better and faster than lzma-mbt's |
+| [`aurora0x27/lzma-mbt`](https://mooncakes.io/docs/aurora0x27/lzma-mbt) | Apache-2.0 | xz decompression and reading of `.lzma` files (`@lzma`) |
 | [`moonbitlang/x`](https://mooncakes.io/docs/moonbitlang/x) (`crypto`, `fs`, `sys`) | Apache-2.0 | MD5 / SHA digests, file access and exit codes in the command line |
 | [`moonbitlang/core`](https://github.com/moonbitlang/core) | Apache-2.0 | standard library |
 

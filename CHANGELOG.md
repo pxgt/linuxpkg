@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- xz packages are now written with `lin2077-zeming/moonxz` (level 9) instead of `lzma-mbt`: the output is smaller than
+  gzip (594 KB against 637 KB on 2.4 MB of source text; lzma-mbt gave 690 KB), passes `xz -t`, and a 6 MB tree builds in
+  1.7 s instead of 7.6 s. Reading xz and `.lzma` still uses lzma-mbt.
+- The CI job that installs packages in containers is named after all six distributions it covers.
+
 ## [0.3.0] - 2026-10-20
 
 ### Added

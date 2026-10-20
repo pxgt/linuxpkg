@@ -91,7 +91,7 @@ jobs:
         run: tools/oracle/run.sh
 
   containers:
-    name: containers (Debian, Ubuntu, Fedora, openEuler)
+    name: containers (Debian, Ubuntu, Fedora, openEuler, Arch, Alpine)
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
