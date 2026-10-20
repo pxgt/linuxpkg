@@ -48,7 +48,7 @@ else
   step "building the native CLI"
   TARGET_DIR="${TARGET_DIR:-$ROOT/_build}"
   moon build --target native --target-dir "$TARGET_DIR" cmd/main
-  BIN="$(find "$TARGET_DIR/native" -name main.exe -path '*cmd/main*' | head -n 1)"
+  BIN="$(find "$TARGET_DIR/native/debug" -name main.exe -path '*cmd/main*' | head -n 1)"
 fi
 [ -x "$BIN" ] || die "linuxpkg binary not found"
 pass "using $BIN"
@@ -266,14 +266,21 @@ STATUS=$?
 set -e
 expect_eq "md5 mismatch exits with 2" "$STATUS" "2"
 expect_in "mismatch names the file" "/usr/bin/hello: md5 mismatch" "$(cat "$WORK/err.txt")"
-# An xz compressed deb is valid but unsupported: exit 1, not 2, and no crash.
-dpkg-deb --root-owner-group -Zxz --build "$WORK/ref/tree" "$WORK/ref/xz.deb" >/dev/null
-set +e
-"$BIN" verify "$WORK/ref/xz.deb" 2>"$WORK/err.txt"
-STATUS=$?
-set -e
-expect_eq "xz exits with 1" "$STATUS" "1"
-expect_in "xz is reported as unsupported" "xz compression is not supported" "$(cat "$WORK/err.txt")"
+# Debs written by dpkg-deb with xz, zstd and no compression are verified in full.
+for COMP in xz zstd none; do
+  dpkg-deb --root-owner-group -Z$COMP --build "$WORK/ref/tree" "$WORK/ref/$COMP.deb" >/dev/null
+  VERIFIED="$("$BIN" verify "$WORK/ref/$COMP.deb")"
+  expect_in "dpkg-deb -Z$COMP deb verifies" "OK" "$VERIFIED"
+  "$BIN" inspect "$WORK/ref/$COMP.deb" --json >"$WORK/ref/$COMP.json"
+  python3 - "$WORK/ref/$COMP.json" "$COMP" <<'PY'
+import json, sys
+report = json.load(open(sys.argv[1]))
+want = {"control": sys.argv[2], "data": sys.argv[2]}
+assert report["compression"] == want, report["compression"]
+assert report["name"] == "hello" and len(report["files"]) == 14, report["files"]
+print("  ok: inspect --json reads the %s members" % sys.argv[2])
+PY
+done
 printf 'not a package' >"$WORK/junk.deb"
 set +e
 "$BIN" verify "$WORK/junk.deb" 2>"$WORK/err.txt"
@@ -362,20 +369,103 @@ PY
   set -e
   expect_eq "damaged payload exits with 2" "$STATUS" "2"
   expect_in "reported as a digest mismatch" "mismatch" "$(cat "$WORK/err.txt")"
-  # A payload compressed with xz is valid but unsupported: exit 1, no crash.
-  SOURCE_DATE_EPOCH=1700000000 rpmbuild -bb --define "_topdir $RB/top" \
-    --define "_binary_payload w2.xzdio" --define "extracted $WORK/rpm-extract" \
-    --define "_build_id_links none" --define "clamp_mtime_to_source_date_epoch 1" \
-    "$RB/top/SPECS/hello.spec" >"$RB/build-xz.log" 2>&1 || die "rpmbuild (xz) failed"
-  XZ_RPM="$RB/top/RPMS/noarch/hello-1.0.0-1.noarch.rpm"
-  set +e
-  "$BIN" verify "$XZ_RPM" 2>"$WORK/err.txt"
-  STATUS=$?
-  set -e
-  expect_eq "xz payload exits with 1" "$STATUS" "1"
-  expect_in "xz is reported as unsupported" "xz compression of the payload is not supported" "$(cat "$WORK/err.txt")"
-  "$BIN" inspect "$XZ_RPM" >/dev/null
-  pass "inspect still works on the xz rpm"
+  # Payloads that rpmbuild compressed with xz and zstd are verified in full.
+  for PAYLOAD in "w2.xzdio:xz" "w19.zstdio:zstd" "w.ufdio:identity"; do
+    FLAGS="${PAYLOAD%%:*}"
+    NAME="${PAYLOAD##*:}"
+    SOURCE_DATE_EPOCH=1700000000 rpmbuild -bb --define "_topdir $RB/top" \
+      --define "_binary_payload $FLAGS" --define "extracted $WORK/rpm-extract" \
+      --define "_build_id_links none" --define "clamp_mtime_to_source_date_epoch 1" \
+      "$RB/top/SPECS/hello.spec" >"$RB/build-$NAME.log" 2>&1 || {
+        echo "  rpmbuild cannot write $NAME payloads here, skipped"
+        continue
+      }
+    REF_RPM="$RB/top/RPMS/noarch/hello-1.0.0-1.noarch.rpm"
+    VERIFIED="$("$BIN" verify "$REF_RPM")"
+    expect_in "rpmbuild $NAME payload verifies" "OK" "$VERIFIED"
+    "$BIN" inspect "$REF_RPM" --json >"$RB/ref-$NAME.json"
+    python3 - "$RB/ref-$NAME.json" "$NAME" <<'PY'
+import json, sys
+report = json.load(open(sys.argv[1]))
+assert report["compression"] == {"payload": sys.argv[2]}, report["compression"]
+assert len(report["files"]) == 5, report["files"]
+print("  ok: inspect --json reads the %s payload" % sys.argv[2])
+PY
+  done
+fi
+
+# ---------------------------------------------------------------- compression
+for COMP in xz zstd none; do
+  step "packages built with --compression $COMP are accepted by the official tools"
+  OUTC="$WORK/comp-$COMP"
+  "$BIN" build "$EXAMPLE" --compression "$COMP" --out "$OUTC"
+  CDEB="$OUTC/hello_1.0.0-1_all.deb"
+  case "$COMP" in xz) EXT=.xz ;; zstd) EXT=.zst ;; none) EXT= ;; esac
+  expect_eq "$COMP: ar members" "$(ar t "$CDEB" | tr '\n' ' ')" "debian-binary control.tar$EXT data.tar$EXT "
+  dpkg-deb --info "$CDEB" >/dev/null
+  expect_eq "$COMP: dpkg-deb --field" "$(dpkg-deb --field "$CDEB" Package)" "hello"
+  CONTENTS="$(dpkg-deb --contents "$CDEB")"
+  expect_in "$COMP: contents" "./usr/bin/hello" "$CONTENTS"
+  expect_in "$COMP: symlink" "./usr/bin/hi -> hello" "$CONTENTS"
+  mkdir "$OUTC/extract"
+  dpkg-deb --extract "$CDEB" "$OUTC/extract"
+  cmp "$OUTC/extract/usr/bin/hello" examples/hello/hello.sh
+  cmp "$OUTC/extract/etc/hello.conf" examples/hello/hello.conf
+  mkdir "$OUTC/control"
+  dpkg-deb --control "$CDEB" "$OUTC/control"
+  (cd "$OUTC/extract" && md5sum -c --quiet "$OUTC/control/md5sums") || die "$COMP: md5sums do not match"
+  pass "$COMP: dpkg-deb extracts files identical to the sources"
+  $SUDO dpkg -i "$CDEB" >/dev/null
+  expect_eq "$COMP: installed program" "$(/usr/bin/hello)" "hello from linuxpkg"
+  dpkg --verify hello && pass "$COMP: dpkg --verify finds no differences"
+  $SUDO dpkg -P hello >/dev/null
+  [ ! -e /usr/bin/hello ] || die "$COMP: program still installed after purge"
+  "$BIN" verify "$CDEB" >/dev/null
+  pass "$COMP: our verify accepts the deb"
+  if [ "$HAVE_RPM" = 1 ]; then
+    CRPM="$OUTC/hello-1.0.0-1.noarch.rpm"
+    KOUT="$(rpm -K --nosignature "$CRPM" 2>&1)"
+    expect_in "$COMP: rpm -K" "digests OK" "$KOUT"
+    KVOUT="$(rpm -Kv "$CRPM" 2>&1 || true)"
+    expect_in "$COMP: payload SHA256 digest" "Payload SHA256 digest: OK" "$KVOUT"
+    REQ="$(rpm -qp --requires "$CRPM")"
+    case "$COMP" in
+      xz) expect_in "$COMP: rpmlib requirement" "rpmlib(PayloadIsXz) <= 5.2-1" "$REQ" ;;
+      zstd) expect_in "$COMP: rpmlib requirement" "rpmlib(PayloadIsZstd) <= 5.4.18-1" "$REQ" ;;
+      none) if grep -q "PayloadIs" <<<"$REQ"; then die "none: no PayloadIs requirement expected"; fi ;;
+    esac
+    expect_eq "$COMP: payload compressor" "$(rpm -qp --qf '%{PAYLOADCOMPRESSOR}' "$CRPM")" "$([ "$COMP" = none ] && echo "(none)" || echo "$COMP")"
+    mkdir "$OUTC/rpm-extract"
+    (cd "$OUTC/rpm-extract" && rpm2cpio "$CRPM" | cpio -idm --quiet)
+    cmp "$OUTC/rpm-extract/usr/bin/hello" examples/hello/hello.sh
+    cmp "$OUTC/rpm-extract/etc/hello.conf" examples/hello/hello.conf
+    pass "$COMP: rpm2cpio extracts files identical to the sources"
+    CROOT="$OUTC/rpm-root"
+    mkdir -p "$CROOT"
+    $SUDO rpm --root "$CROOT" --initdb
+    $SUDO rpm --root "$CROOT" -ivh --noscripts --nodeps "$CRPM" >"$OUTC/rpm-install.txt" 2>&1 || {
+      cat "$OUTC/rpm-install.txt"
+      die "$COMP: rpm -i failed"
+    }
+    VERIFY_OUT="$($SUDO rpm --root "$CROOT" -V hello 2>&1 || true)"
+    if [ -n "$VERIFY_OUT" ]; then echo "$VERIFY_OUT"; die "$COMP: rpm -V found differences"; fi
+    pass "$COMP: rpm installs the package and rpm -V finds no differences"
+    "$BIN" verify "$CRPM" >/dev/null
+    pass "$COMP: our verify accepts the rpm"
+  fi
+done
+# Per-format settings in the configuration.
+sed 's/"mtime": 1700000000,/"mtime": 1700000000, "compression": "xz", "rpm": {"compression": "zstd"},/' "$EXAMPLE" >"$WORK/mixed.json"
+if ! grep -q '"rpm": {"compression"' "$WORK/mixed.json"; then
+  # The example has no mtime line to hook into: add the keys after the opening brace.
+  sed '0,/{/s//{ "compression": "xz", "rpm": {"compression": "zstd"},/' "$EXAMPLE" >"$WORK/mixed.json"
+fi
+for f in hello.sh hello.conf README.txt; do cp "examples/hello/$f" "$WORK/$f"; done
+cp -r examples/hello/scripts "$WORK/scripts" 2>/dev/null || true
+"$BIN" build "$WORK/mixed.json" --out "$WORK/mixed"
+expect_eq "config: deb uses the package-wide xz" "$(ar t "$WORK/mixed/hello_1.0.0-1_all.deb" | tr '\n' ' ')" "debian-binary control.tar.xz data.tar.xz "
+if [ "$HAVE_RPM" = 1 ]; then
+  expect_eq "config: rpm uses its own zstd" "$(rpm -qp --qf '%{PAYLOADCOMPRESSOR}' "$WORK/mixed/hello-1.0.0-1.noarch.rpm")" "zstd"
 fi
 
 # ---------------------------------------------------------------- relations

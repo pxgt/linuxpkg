@@ -6,6 +6,39 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `compress` package: one place for gzip, xz, zstd, `.lzma` (read-only) and uncompressed streams —
+  `compress`, `decompress` with a size limit, `detect` by signature, `Compression::parse`/`name`/`extension`.
+  xz and `.lzma` come from `aurora0x27/lzma-mbt`, zstd from `Milky2018/zstd`.
+- deb: `build(spec, compression~)` writes `control.tar`/`data.tar` with `.gz`, `.xz`, `.zst` or no suffix; `read`
+  accepts gzip, xz, zstd, lzma and uncompressed members, in any combination.
+- rpm: `build(spec, compression~)` writes gzip, xz, zstd or uncompressed payloads, with
+  `rpmlib(PayloadIsXz)` / `rpmlib(PayloadIsZstd)` in the requirements; `read`/`verify` unpack gzip, xz, zstd,
+  lzma and uncompressed payloads, so packages from Debian, Ubuntu, Fedora and openEuler are verified in full.
+- Configuration: `compression` (package-wide) and `deb` / `rpm` objects with their own `compression`;
+  command line: `build --compression none|gzip|xz|zstd` (`-z`).
+- Bounded unpacking for xz and zstd: the unpacked size is measured from the block / frame headers before
+  decoding, on top of the existing gzip limit (default 1 GiB).
+- Tests: real xz / zstd / lzma / gzip streams from the reference tools, bombs, truncations and bit flips for every
+  compression, real `dpkg-deb -Zxz/-Zzstd` debs; the oracle script builds, installs and verifies every compression
+  with `dpkg`, `rpm` and `rpm2cpio`; the container job installs every compression in Debian, Ubuntu, Fedora and
+  openEuler and verifies the distributions' own `hello` / `tree` packages.
+
+### Changed
+
+- `Config` gained `compression`, `deb` and `rpm` fields; `PackageSpec` is unchanged.
+- `verify` no longer reports xz and zstd packages as unsupported; only bzip2 stays unsupported.
+- rpm payloads without a `PAYLOADCOMPRESSOR` tag (what rpmbuild writes for uncompressed payloads) are recognised
+  from the payload itself.
+- `internal/gunzip` was folded into `compress`.
+
+### Known limits
+
+- The xz and zstd encoders in the underlying libraries are weak: xz output is about as large as gzip, zstd output
+  is about 2.4 times larger than gzip on text (see `docs/formats.md`). The default stays gzip.
+- bzip2 is not supported (no pure-MoonBit implementation exists).
+
 ## [0.2.0] - 2026-10-18
 
 ### Added

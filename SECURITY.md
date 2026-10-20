@@ -12,7 +12,7 @@ unavailable. Do not post exploit details in public issues. Expect an answer with
 
 ## What counts
 
-linuxpkg parses untrusted files (`.deb`, `.rpm`, tar, ar, cpio, gzip) and untrusted configuration. Reports are
+linuxpkg parses untrusted files (`.deb`, `.rpm`, tar, ar, cpio, gzip, xz, zstd, lzma) and untrusted configuration. Reports are
 welcome for:
 
 - a crash, hang or out-of-memory caused by a crafted input (all readers are expected to return a typed error);
@@ -22,8 +22,10 @@ welcome for:
 
 ## Design notes
 
-- Readers check every length against the real input size, cap entry counts, and unpack gzip through a streaming
-  decoder with a hard output limit (default 1 GiB), so a small compressed input cannot allocate unbounded memory.
+- Readers check every length against the real input size, cap entry counts, and cap the unpacked size of every
+  compressed stream (default 1 GiB): gzip stops at the limit while decoding, xz and zstd measure the unpacked
+  size from the block and frame headers before decoding anything, so a small compressed input cannot allocate
+  unbounded memory. The xz dictionary is limited to 256 MiB. See `docs/formats.md`.
 - Install paths in built packages must be absolute and free of `..`, `.` and `//`; nothing can be placed below a
   symlink or file of the same package.
 - linuxpkg never extracts packages and never runs maintainer scripts; it only reads and writes archives.
