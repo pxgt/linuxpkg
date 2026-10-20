@@ -1,0 +1,7 @@
+import {
+  "Xpeng/linuxpkg/spec",
+  "Xpeng/linuxpkg/archive/tar",
+  "Xpeng/linuxpkg/compress",
+  "moonbitlang/x/crypto",
+  "moonbitlang/core/encoding/utf8",
+}

@@ -8,7 +8,11 @@ import {
 // Values
 pub fn build(Array[Entry], long_names? : LongNames) -> Bytes raise TarError
 
+pub fn build_with_records(Array[(Entry, Array[(String, String)])], long_names? : LongNames, end_marker? : Bool) -> Bytes raise TarError
+
 pub fn parse(BytesView, max_entries? : Int32) -> Array[Entry] raise TarError
+
+pub fn parse_with_records(BytesView, max_entries? : Int32) -> Array[(Entry, Array[(String, String)])] raise TarError
 
 // Errors
 pub(all) suberror TarError {

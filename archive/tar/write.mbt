@@ -265,6 +265,7 @@ fn write_entry(
   out : Buffer,
   entry : Entry,
   long_names : LongNames,
+  extra : Array[(String, String)],
 ) -> Unit raise TarError {
   let mut name = @utf8.encode(entry.path)
   check_text("path", name, 1 << 20, false)
@@ -318,6 +319,9 @@ fn write_entry(
   } else {
     link[:]
   }
+  let extra_records : Array[Bytes] = extra.map(pair => {
+    pax_record(pair.0, @utf8.encode(pair.1))
+  })
   match long_names {
     Pax => {
       let records : Array[Bytes] = []
@@ -327,11 +331,17 @@ fn write_entry(
       if link_overflows {
         records.push(pax_record("linkpath", link))
       }
+      for record in extra_records {
+        records.push(record)
+      }
       if records.length() > 0 {
         write_pax_header(out, records, name, entry.mtime)
       }
     }
     Gnu => {
+      if extra_records.length() > 0 {
+        write_pax_header(out, extra_records, name, entry.mtime)
+      }
       if link_overflows {
         write_gnu_long(out, b'K', link)
       }
@@ -380,10 +390,42 @@ pub fn build(
   entries : Array[Entry],
   long_names~ : LongNames = Pax,
 ) -> Bytes raise TarError {
+  build_with_records(entries.map(e => (e, [])), long_names~)
+}
+
+///|
+/// Like `build`, with extra PAX records for some entries (written in an `x`
+/// header just before the entry), and optionally without the two zero blocks
+/// that normally end an archive (`end_marker=false`, as Alpine's control
+/// segment needs).
+///
+/// # Example
+/// ```mbt check
+/// test {
+///   let entry = @tar.Entry::file("a", b"x")
+///   let archive = @tar.build_with_records(
+///     [(entry, [("APK-TOOLS.checksum.SHA1", "abc")])],
+///     end_marker=false,
+///   )
+///   let parsed = @tar.parse_with_records(archive)
+///   assert_eq(parsed[0].1, [("APK-TOOLS.checksum.SHA1", "abc")])
+/// }
+/// ```
+pub fn build_with_records(
+  entries : Array[(Entry, Array[(String, String)])],
+  long_names~ : LongNames = Pax,
+  end_marker~ : Bool = true,
+) -> Bytes raise TarError {
   let out = Buffer(size_hint=4096)
-  for entry in entries {
-    write_entry(out, entry, long_names)
+  for item in entries {
+    for pair in item.1 {
+      check_text("PAX key", @utf8.encode(pair.0), 1 << 16, false)
+      check_text("PAX value", @utf8.encode(pair.1), 1 << 20, false)
+    }
+    write_entry(out, item.0, long_names, item.1)
   }
-  out.write_bytes(Bytes::make(2 * BLOCK_SIZE, b'\x00'))
+  if end_marker {
+    out.write_bytes(Bytes::make(2 * BLOCK_SIZE, b'\x00'))
+  }
   out.to_bytes()
 }

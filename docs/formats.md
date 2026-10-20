@@ -115,6 +115,34 @@ signature (`1f 8b`, `fd 37 7a 58 5a 00`, `28 b5 2f fd`, plausible `.lzma` header
 - Reading: the package is unpacked with a size limit like the others; `verify` checks every `.MTREE` line (type, mode,
   size, SHA-256, link target), that no file is missing from or extra to the list, and the safety of the paths.
 
+## Alpine Linux package (`.apk`, format 2)
+
+- Two gzip streams one after the other (a third, signature stream comes first in signed packages): the control tar, then
+  the data tar. apk reads the stream boundaries from the gzip members, so each part is compressed on its own. Only gzip
+  exists in this format.
+- Control tar: `.PKGINFO` first, then the maintainer scripts (`.pre-install`, `.post-install`, `.pre-upgrade`,
+  `.post-upgrade`, `.pre-deinstall`, `.post-deinstall`, mode 755). It is written **without** the two zero blocks that
+  end a tar archive, like abuild's `--cut`; the reader accepts both.
+- `.PKGINFO`: `pkgname`, `pkgver` (`version-r<release>`), `pkgdesc` (first line of the description), `url`, `builddate`,
+  `packager`, `size` (bytes of regular files), `arch`, `origin`, `license`, `replaces`, `provides`, `depend`, and
+  `datahash`: the SHA-256 of the data stream **as stored** (the gzip bytes).
+- Data tar: files with paths relative to `/`, sorted, every parent directory present, ending with the usual zero blocks.
+  Each regular file and symbolic link has a PAX record `APK-TOOLS.checksum.SHA1`: the SHA-1 of the content, or of the link
+  text for a symlink (found by testing: without it apk 2.14 warns that "support for packages without embedded checksums
+  will be dropped", and `apk audit` reports the symlink as changed).
+- Mapping: `depends` → `depend`; `conflicts` → `depend = !name`; `provides` → `provides`; `replaces` → `replaces`.
+  `recommends` and `suggests` have no equivalent and are left out. Scripts: the install scripts also run on upgrade (copied
+  to `.pre-upgrade` / `.post-upgrade`), as in a deb or an rpm. Files under `/etc` are protected by apk by convention, so
+  `config` needs no marker.
+- Versions: digits and dots with an optional letter and suffixes (`1.2.3`, `2.0b`, `1.0_rc1`). linuxpkg's `~` for
+  pre-releases becomes `_` (`1.0~rc1` → `1.0_rc1`). `release` must be a number (`-r1`), there is no epoch.
+- Architectures: `amd64` → `x86_64`, `arm64` → `aarch64`, `i386` → `x86`, `armhf` → `armv7`, `ppc64le`, `s390x`, `riscv64`,
+  `loong64` → `loongarch64`, `all` → `noarch`; `armel` and `mips64le` have no Alpine port and are rejected.
+- Not written: signatures (install with `apk add --allow-untrusted`, or sign with `abuild-sign` afterwards), triggers,
+  `install_if`, `commit`. Reading accepts signed packages and lists the signature file names.
+- Reading and `verify` check `datahash`, every `APK-TOOLS.checksum.SHA1` record, the paths and the `.PKGINFO` basics; the
+  signature itself is not verified (that needs the public key).
+
 ## cpio (payload of an rpm)
 
 - `newc` (`070701`): 110-byte header of 13 eight-digit hex fields, NUL terminated name, header and data padded to

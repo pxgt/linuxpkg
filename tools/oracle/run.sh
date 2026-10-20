@@ -712,6 +712,65 @@ print("  ok: .MTREE agrees with bsdtar's mtree of the extracted tree on %d entri
 PY
 fi
 
+# ---------------------------------------------------------------- alpine linux
+step "apk: Alpine packages, read back with Python's tarfile and (if present) apk"
+APKD="$WORK/apk"
+mkdir -p "$APKD"
+"$BIN" build "$EXAMPLE" --format apk --out "$APKD" >/dev/null
+APKFILE="$APKD/hello-1.0.0-r1.apk"
+[ -f "$APKFILE" ] || die "expected $APKFILE"
+python3 - "$APKFILE" <<'PY'
+import sys, zlib, tarfile, io, hashlib
+data = open(sys.argv[1], "rb").read()
+members, pos = [], 0
+while pos < len(data):
+    d = zlib.decompressobj(31)
+    out = d.decompress(data[pos:])
+    used = len(data[pos:]) - len(d.unused_data)
+    members.append((data[pos:pos + used], out))
+    pos += used
+assert len(members) == 2, len(members)
+control = tarfile.open(fileobj=io.BytesIO(members[0][1]))
+names = control.getnames()
+assert names[0] == ".PKGINFO", names
+assert members[0][1][-1024:] != b"\0" * 1024, "the control segment must not end with the tar end marker"
+info = dict(l.split(" = ", 1) for l in control.extractfile(".PKGINFO").read().decode().splitlines() if " = " in l)
+assert info["pkgname"] == "hello" and info["pkgver"] == "1.0.0-r1" and info["arch"] == "noarch", info
+assert info["datahash"] == hashlib.sha256(members[1][0]).hexdigest(), "datahash is not the sha256 of the data stream"
+data_tar = tarfile.open(fileobj=io.BytesIO(members[1][1]))
+checked = 0
+for m in data_tar:
+    sums = m.pax_headers.get("APK-TOOLS.checksum.SHA1")
+    if m.isreg():
+        assert sums == hashlib.sha1(data_tar.extractfile(m).read()).hexdigest(), m.name
+        checked += 1
+    elif m.issym():
+        assert sums == hashlib.sha1(m.linkname.encode()).hexdigest(), m.name
+        checked += 1
+    else:
+        assert sums is None, m.name
+assert checked == 4, checked
+assert members[1][1][-1024:] == b"\0" * 1024
+print("  ok: tarfile reads both segments; datahash and %d SHA-1 records are right" % checked)
+PY
+"$BIN" verify "$APKFILE" >/dev/null
+pass "our verify accepts the apk"
+APK_TOOL="${APK:-$(command -v apk || true)}"
+if [ -n "$APK_TOOL" ] && [ -x "$APK_TOOL" ]; then
+  AROOT="$WORK/apk-root"
+  mkdir -p "$AROOT"
+  "$APK_TOOL" --root "$AROOT" --initdb --allow-untrusted --no-network --no-cache --no-scripts add "$APKFILE" >"$WORK/apk-add.txt" 2>&1 || { cat "$WORK/apk-add.txt"; die "apk add failed"; }
+  if grep -qi "warning\|error" "$WORK/apk-add.txt"; then cat "$WORK/apk-add.txt"; die "apk add warned"; fi
+  expect_eq "apk installed program" "$("$AROOT/usr/bin/hello")" "hello from linuxpkg"
+  expect_eq "apk installed symlink" "$(readlink "$AROOT/usr/bin/hi")" "hello"
+  expect_in "apk info lists the files" "usr/bin/hello" "$("$APK_TOOL" --root "$AROOT" info -L hello)"
+  AUDIT="$("$APK_TOOL" --root "$AROOT" audit --full 2>&1 | grep -v '^D lib/' || true)"
+  [ -z "$AUDIT" ] || { echo "$AUDIT"; die "apk audit found differences"; }
+  pass "apk add installs the package and apk audit finds no differences"
+else
+  echo "  apk is not installed, the install check is left to the container job"
+fi
+
 # ---------------------------------------------------------------- self-hosting
 step "linuxpkg packages itself (examples/self)"
 SELF_TARGET="${TARGET_DIR:-$ROOT/_build}"

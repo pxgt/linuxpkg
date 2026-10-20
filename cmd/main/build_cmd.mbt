@@ -46,8 +46,14 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
     Some(f) => f
     None => "all"
   }
-  if format != "deb" && format != "rpm" && format != "arch" && format != "all" {
-    raise Usage("unknown format \"\{format}\", expected deb, rpm, arch or all")
+  if format != "deb" &&
+    format != "rpm" &&
+    format != "arch" &&
+    format != "apk" &&
+    format != "all" {
+    raise Usage(
+      "unknown format \"\{format}\", expected deb, rpm, arch, apk or all",
+    )
   }
   let forced = match options.value("compression") {
     Some(name) =>
@@ -108,6 +114,23 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
     } noraise {
       pkg => {
         let target = join_path(out_dir, @arch.file_name(spec, compression~))
+        write_bytes(target, pkg)
+        println("wrote \{target} (\{pkg.length()} bytes)")
+      }
+    }
+  }
+  if format == "apk" || format == "all" {
+    // apk packages are always gzip, so --compression does not apply.
+    try @apk.build(spec) catch {
+      err =>
+        if format == "apk" {
+          raise Failed("\{config_path}: \{err}")
+        } else {
+          eprintln("linuxpkg: no Alpine Linux package: \{err}")
+        }
+    } noraise {
+      pkg => {
+        let target = join_path(out_dir, @apk.file_name(spec))
         write_bytes(target, pkg)
         println("wrote \{target} (\{pkg.length()} bytes)")
       }

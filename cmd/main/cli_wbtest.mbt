@@ -295,7 +295,8 @@ test "arch builds, inspects and verifies an Arch Linux package" {
   assert_eq(@arch.read(read_bytes(target)).compression, "xz")
   // `all` adds it to the deb and the rpm; --compression wins.
   assert_eq(run(["build", config, "-z", "gzip", "--out", dir + "/b"]), 0)
-  assert_eq(@fs.read_dir(dir + "/b").length(), 3)
+  assert_eq(@fs.read_dir(dir + "/b").length(), 4)
+  assert_true(@fs.path_exists(dir + "/b/tinytool-1.0-r1.apk"))
   assert_true(@fs.path_exists(dir + "/b/tinytool-1.0-1-any.pkg.tar.gz"))
   // An architecture without an Arch Linux port is skipped by `all`, and an
   // error for `--format arch`.
@@ -305,7 +306,8 @@ test "arch builds, inspects and verifies an Arch Linux package" {
   )
   write_bytes(dir + "/s390.json", @utf8.encode(s390))
   assert_eq(run(["build", dir + "/s390.json", "--out", dir + "/c"]), 0)
-  assert_eq(@fs.read_dir(dir + "/c").length(), 2)
+  // (deb, rpm and apk: Alpine does have an s390x port)
+  assert_eq(@fs.read_dir(dir + "/c").length(), 3)
   assert_eq(
     run(["build", dir + "/s390.json", "--format", "arch", "--out", dir + "/c"]),
     1,
@@ -322,6 +324,54 @@ test "arch builds, inspects and verifies an Arch Linux package" {
     }
     @fs.remove_dir(dir + "/" + sub)
   }
+  for name in @fs.read_dir(dir) {
+    @fs.remove_file(dir + "/" + name)
+  }
+  @fs.remove_dir(dir)
+}
+
+///|
+test "apk builds, inspects and verifies an Alpine Linux package" {
+  let dir = "cli_apk_tmp"
+  ensure_dir(dir)
+  write_bytes(dir + "/linuxpkg.json", @utf8.encode(CONFIG_JSON))
+  write_bytes(dir + "/tool.sh", b"#!/bin/sh\necho hi\n")
+  let config = dir + "/linuxpkg.json"
+  assert_eq(run(["build", config, "--format", "apk", "--out", dir + "/a"]), 0)
+  let target = dir + "/a/tinytool-1.0-r1.apk"
+  assert_true(@fs.path_exists(target))
+  assert_eq(@fs.read_dir(dir + "/a").length(), 1)
+  assert_eq(run(["verify", target]), 0)
+  assert_eq(run(["inspect", target]), 0)
+  assert_eq(run(["inspect", target, "--json"]), 0)
+  // An architecture Alpine has no port for is an error for --format apk.
+  let armel = CONFIG_JSON.replace(
+    old="\"arch\": \"all\"",
+    new="\"arch\": \"armel\"",
+  )
+  write_bytes(dir + "/armel.json", @utf8.encode(armel))
+  assert_eq(
+    run(["build", dir + "/armel.json", "--format", "apk", "--out", dir + "/c"]),
+    1,
+  )
+  // A damaged .apk is a mismatch; a gzip-compressed Arch package is not an apk.
+  let data = read_bytes(target)
+  write_bytes(dir + "/broken.apk", data[0:data.length() / 2].to_owned())
+  assert_eq(run(["verify", dir + "/broken.apk"]), 2)
+  assert_eq(
+    run(["build", config, "--format", "arch", "-z", "gzip", "--out", dir + "/g"]),
+    0,
+  )
+  assert_eq(run(["verify", dir + "/g/tinytool-1.0-1-any.pkg.tar.gz"]), 0)
+  for name in @fs.read_dir(dir + "/g") {
+    @fs.remove_file(dir + "/g/" + name)
+  }
+  @fs.remove_dir(dir + "/g")
+  @fs.remove_dir(dir + "/c")
+  for name in @fs.read_dir(dir + "/a") {
+    @fs.remove_file(dir + "/a/" + name)
+  }
+  @fs.remove_dir(dir + "/a")
   for name in @fs.read_dir(dir) {
     @fs.remove_file(dir + "/" + name)
   }

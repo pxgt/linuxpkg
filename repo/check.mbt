@@ -42,10 +42,10 @@ fn attribute(tag : String, name : String) -> String? {
 ///|
 fn unescape_xml(text : String) -> String {
   text
-  .replace(old="&lt;", new="<")
-  .replace(old="&gt;", new=">")
-  .replace(old="&quot;", new="\"")
-  .replace(old="&amp;", new="&")
+  .replace_all(old="&lt;", new="<")
+  .replace_all(old="&gt;", new=">")
+  .replace_all(old="&quot;", new="\"")
+  .replace_all(old="&amp;", new="&")
 }
 
 ///|

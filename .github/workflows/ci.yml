@@ -54,7 +54,7 @@ jobs:
             done
             case "$c" in xz) ext=.xz ;; zstd) ext=.zst ;; gzip) ext=.gz ;; none) ext= ;; esac
             for t in wasm wasm-gc js; do
-              for f in hello_1.0.0-1_all.deb hello-1.0.0-1.noarch.rpm "hello-1.0.0-1-any.pkg.tar$ext"; do
+              for f in hello_1.0.0-1_all.deb hello-1.0.0-1.noarch.rpm "hello-1.0.0-1-any.pkg.tar$ext" hello-1.0.0-r1.apk; do
                 cmp "/tmp/cli-native-$c/$f" "/tmp/cli-$t-$c/$f"
               done
             done

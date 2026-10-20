@@ -54,7 +54,10 @@ The script checks, in order:
    too (apart from createrepo_c condensing `libc.so.6(GLIBC_*)` requirements).
 9. **Arch Linux**: `bsdtar` (libarchive, the reader behind pacman) lists, extracts and agrees with our `.MTREE` on every
    entry (type, mode, size, SHA-256, link) for each compression; `.PKGINFO` and `.INSTALL` are checked.
-10. **Compression**: the example is built with `--compression xz|zstd|none`; `dpkg-deb` lists, extracts and checks md5sums,
+10. **Alpine**: Python's `tarfile` reads both segments of an `.apk`, `datahash` is the SHA-256 of the data stream and every
+    `APK-TOOLS.checksum.SHA1` is right; with a static `apk` on the path, `apk add --allow-untrusted` installs the package in a
+    private root without warnings and `apk audit --full` finds no differences.
+11. **Compression**: the example is built with `--compression xz|zstd|none`; `dpkg-deb` lists, extracts and checks md5sums,
    `dpkg -i`, `dpkg --verify` and `dpkg -P` pass; `rpm -K` and `Payload SHA256 digest: OK`, the `rpmlib(PayloadIsXz)` /
    `rpmlib(PayloadIsZstd)` requirements in `rpm -qp --requires`, `rpm2cpio | cpio`, a private-root install and `rpm -V`
    pass. A configuration with `"compression": "xz"` and `"rpm": {"compression": "zstd"}` is checked too.
@@ -74,6 +77,11 @@ In `archlinux:latest` it runs `pacman -U` on the hello package of every compress
 `.INSTALL` scripts, and checks `pacman -Q`, `-Qi`, `-Ql`, `-Qo`, `pacman -Qkk` (no altered files) and `pacman -R`. For the
 reverse direction it downloads `which` and `tree` with `pacman -Sw` and builds a package with the real `makepkg`, then
 compares `inspect --json` with `pacman -Qip` / `-Qlp` and runs `verify` (exit 0) on each.
+
+In `alpine:3.20` it runs `apk add --allow-untrusted` on the hello apk (scripts included), checks the program, the
+maintainer-script marker, `apk info -L` and `apk audit --full` for the package's files, and `apk del`; then it
+fetches `tree` and `busybox-binsh` from Alpine's repository with `apk fetch` and compares `inspect --json` with
+`apk info -qL`, and `verify` must exit 0.
 
 It also builds a repository from a hello package and a package depending on it, and installs the dependent package
 with the container's own tools: `apt-get install` in `debian:12` and `ubuntu:24.04` (with `[trusted=yes]`), and

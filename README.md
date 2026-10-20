@@ -39,6 +39,7 @@ linuxpkg 是一个**纯 MoonBit** 实现的 Linux 软件包构建与检查工具
 | 压缩：gzip（默认）、xz、zstd、不压缩，deb 和 rpm 都能选（`--compression` 或配置里的 `compression`） | ✅ |
 | 读取并完整校验 gzip / xz / zstd / lzma / 不压缩的 deb 与 rpm，包括 Debian、Ubuntu、Fedora、openEuler 的真实发行版包 | ✅ |
 | **Arch Linux 包**（`.pkg.tar.zst`：`.PKGINFO`、带 SHA-256 的 `.MTREE`、`.INSTALL`；构建、检查、校验，`pacman -U` 能装、`pacman -Qkk` 无差异） | ✅ |
+| **Alpine 包**（`.apk`：控制段、数据段、`datahash`、每个文件的 SHA-1；构建、检查、校验，`apk add --allow-untrusted` 能装、`apk audit` 无差异） | ✅ |
 | **软件源**：`linuxpkg repo <目录>` 生成 apt 平铺仓库（Packages / Packages.gz / Packages.xz / Release）和 dnf 仓库（repodata，与 createrepo_c 输出一致），别人直接 `apt install` / `dnf install` | ✅ |
 | 有界解压：xz、zstd、gzip 炸弹在解压前或解压中就被上限截住（默认 1 GiB） | ✅ |
 
@@ -74,9 +75,9 @@ moon run cmd/main --target wasm-gc -- --help
 
 ```sh
 linuxpkg init                                    # 写出一份示例 linuxpkg.json
-linuxpkg build examples/hello/linuxpkg.json --out dist     # 同时生成 deb、rpm 和 Arch 包（--format deb|rpm|arch|all）
+linuxpkg build examples/hello/linuxpkg.json --out dist     # 同时生成 deb、rpm、Arch 包和 Alpine 包（--format deb|rpm|arch|apk|all）
 linuxpkg build examples/hello/linuxpkg.json --compression zstd --out dist-zstd   # 换压缩：none|gzip|xz|zstd
-linuxpkg inspect dist/hello_1.0.0-1_all.deb      # 看元数据和文件列表（也认 .rpm 和 .pkg.tar.*）
+linuxpkg inspect dist/hello_1.0.0-1_all.deb      # 看元数据和文件列表（也认 .rpm、.apk 和 .pkg.tar.*）
 linuxpkg inspect dist/hello-1.0.0-1.noarch.rpm --json
 linuxpkg verify dist/hello-1.0.0-1.noarch.rpm    # 退出码 0 表示通过
 linuxpkg repo dist                               # 给 dist 里的包生成 apt / dnf 软件源索引
@@ -142,8 +143,8 @@ linuxpkg repo dist                               # 给 dist 里的包生成 apt 
 
 ## 质量数字
 
-- 测试：205 个，wasm-gc、wasm、js、native 四个后端全部通过。
-- 核心包行覆盖率 **95.1%**（spec 97.7%、tar 97.3%、ar 96.4%、cpio 100%、deb 94.4%、rpm 93.9%、compress 89.0%），CI 强制不低于 80%（`tools/check_core_coverage.py`）。
+- 测试：254 个，wasm-gc、wasm、js、native 四个后端全部通过。
+- 核心包行覆盖率 **93.3%**（spec 97.0%、tar 97.8%、ar 96.4%、cpio 100%、deb 95.6%、rpm 94.2%、compress 91.9%、repo 86.8%、arch 91.5%、apk 89.4%），CI 强制不低于 80%（`tools/check_core_coverage.py`）。
 - 恶意输入：tar、ar、cpio、deb、rpm 的每一种截断和每个字节翻转（gzip / xz / zstd / 不压缩各测一遍）都只会得到结果或明确的错误，不会崩溃；
   gzip、xz、zstd 炸弹都被 1 GiB 默认上限截住（xz 和 zstd 在解压前就从块头 / 帧头算出解压后大小）。
 
@@ -156,7 +157,7 @@ linuxpkg repo dist                               # 给 dist 里的包生成 apt 
 
 - 包签名和仓库签名（GPG / PGP）：`repo` 命令不签名，[docs/repository.md](docs/repository.md) 给出用外部 `gpg` 签名的命令
 - bzip2 压缩（生态里没有可用的纯 MoonBit 实现；读到会明确报 `unsupported`）。`.lzma` 只能读，不能写。
-- Alpine apk、源码包（`.dsc`、`.src.rpm`）、Arch 的软件源数据库（`repo-add`）
+- 源码包（`.dsc`、`.src.rpm`）、Arch / Alpine 的软件源数据库（`repo-add`、`APKINDEX`）、包签名
 - 自动分析二进制的动态库依赖
 - 运行维护者脚本（只负责打包，不负责安装）
 
@@ -187,7 +188,7 @@ tools/oracle/run.sh                        # 需要 dpkg-deb、dpkg、sudo（可
 ```
 
 目录：`spec/`（包模型、配置、校验）、`archive/tar|ar|cpio/`（归档格式）、`compress/`（gzip / xz / zstd 压缩与有界解压）、
-`deb/`、`rpm/`、`arch/`（构建、读取、校验）、`repo/`（apt / dnf 软件源索引）、`cmd/main/`（命令行）、`examples/`（示例）、`tools/oracle/`（官方工具验证脚本）。
+`deb/`、`rpm/`、`arch/`、`apk/`（构建、读取、校验）、`repo/`（apt / dnf 软件源索引）、`cmd/main/`（命令行）、`examples/`（示例）、`tools/oracle/`（官方工具验证脚本）。
 
 ## 许可证
 

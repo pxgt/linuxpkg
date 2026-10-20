@@ -65,7 +65,7 @@ Parent directories: debs and Arch Linux packages list every parent directory aut
 ## Command line
 
 ```
-linuxpkg build <config.json> [--format deb|rpm|arch|all] [--compression none|gzip|xz|zstd] [--out DIR]
+linuxpkg build <config.json> [--format deb|rpm|arch|apk|all] [--compression none|gzip|xz|zstd] [--out DIR]
 linuxpkg inspect <file.deb|file.rpm> [--json]
 linuxpkg verify  <file.deb|file.rpm>
 linuxpkg repo   <dir> [--format deb|rpm|all]
@@ -80,6 +80,7 @@ Exit status: `0` success; `1` usage error, unreadable file, not a package, or un
 Output names: `name_version-release_arch.deb`, `name-version-release.arch.rpm` and `name-version-release-arch.pkg.tar.zst`
 (the epoch is not part of the deb and rpm file names; Arch Linux names include it as `name-epoch:version-...`).
 
-`--format all` (the default) writes the deb, the rpm and the Arch Linux package. A package that does not fit Arch Linux
-(architecture without a port, release that is not a number) is skipped with a note; `--format arch` reports the reason as
-an error. Arch Linux packages default to zstd like makepkg, the other formats to gzip.
+`--format all` (the default) writes the deb, the rpm, the Arch Linux package and the Alpine package
+(`name-version-r<release>.apk`). A package that does not fit Arch Linux or Alpine (architecture without a port, release
+that is not a number, an epoch for Alpine) is skipped with a note; `--format arch` and `--format apk` report the reason as
+an error. Alpine packages are always gzip, so `compression` does not apply to them. Arch Linux packages default to zstd like makepkg, the other formats to gzip.

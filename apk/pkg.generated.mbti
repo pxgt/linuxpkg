@@ -1,0 +1,43 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Xpeng/linuxpkg/apk"
+
+import {
+  "Xpeng/linuxpkg/archive/tar",
+  "Xpeng/linuxpkg/spec",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn arch_name(@spec.Arch) -> String?
+
+pub fn build(@spec.PackageSpec) -> Bytes raise ApkError
+
+pub fn file_name(@spec.PackageSpec) -> String
+
+pub fn read(BytesView, max_unpacked? : Int32) -> ApkPackage raise ApkError
+
+// Errors
+pub(all) suberror ApkError {
+  Invalid(field~ : String, message~ : String)
+  Corrupt(message~ : String)
+  Unsupported(message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for ApkError
+
+// Types and methods
+pub(all) struct ApkPackage {
+  signatures : Array[String]
+  pkginfo : Array[(String, String)]
+  control_files : Array[(String, Bytes)]
+  data : Array[(@tar.Entry, Array[(String, String)])]
+  data_packed : Bytes
+} derive(Eq, @debug.Debug)
+pub fn ApkPackage::checked_files(Self) -> Int32
+pub fn ApkPackage::field(Self, String) -> String?
+pub fn ApkPackage::fields(Self, String) -> Array[String]
+pub fn ApkPackage::to_json(Self) -> Json
+pub fn ApkPackage::verify(Self) -> Array[String]
+
+// Type aliases
+
+// Traits
