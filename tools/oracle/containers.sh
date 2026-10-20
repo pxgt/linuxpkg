@@ -293,7 +293,7 @@ arch_check() {
       test -f /etc/hello.conf
       test "$(pacman -Q hello)" = "hello 1.0.0-1"
       pacman -Qi hello | tee /tmp/qi.txt
-      grep -q "^Architecture *: Any" /tmp/qi.txt
+      grep -qi "^Architecture *: any" /tmp/qi.txt
       grep -q "^Licenses *: Apache-2.0" /tmp/qi.txt
       grep -q "^URL *: https://github.com/pxgt/linuxpkg" /tmp/qi.txt
       pacman -Ql hello
