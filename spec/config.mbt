@@ -72,6 +72,9 @@ pub(all) struct Config {
   compression : @compress.Compression?
   deb : FormatOptions
   rpm : FormatOptions
+  /// Settings of the Arch Linux package (`"pacman"` in the file; `"arch"` is
+  /// the CPU architecture).
+  pacman : FormatOptions
 } derive(Eq, Debug)
 
 ///|
@@ -81,6 +84,16 @@ pub fn Config::deb_compression(self : Config) -> @compress.Compression {
   match (self.deb.compression, self.compression) {
     (Some(c), _) | (None, Some(c)) => c
     (None, None) => Gzip
+  }
+}
+
+///|
+/// The compression to use for an Arch Linux package: the `pacman` setting, else
+/// the package-wide one, else zstd (what makepkg uses).
+pub fn Config::arch_compression(self : Config) -> @compress.Compression {
+  match (self.pacman.compression, self.compression) {
+    (Some(c), _) | (None, Some(c)) => c
+    (None, None) => Zstd
   }
 }
 
@@ -99,7 +112,7 @@ let top_level_keys : Array[String] = [
   "$schema", "name", "version", "release", "epoch", "arch", "maintainer", "description",
   "homepage", "license", "vendor", "section", "priority", "depends", "recommends",
   "suggests", "conflicts", "replaces", "provides", "mtime", "contents", "scripts",
-  "compression", "deb", "rpm",
+  "compression", "deb", "rpm", "pacman",
 ]
 
 ///|
@@ -469,5 +482,6 @@ pub fn Config::parse(text : String) -> Config raise SpecError {
     compression: opt_compression(map, "compression"),
     deb: parse_format_options(map.get("deb"), "deb"),
     rpm: parse_format_options(map.get("rpm"), "rpm"),
+    pacman: parse_format_options(map.get("pacman"), "pacman"),
   }
 }

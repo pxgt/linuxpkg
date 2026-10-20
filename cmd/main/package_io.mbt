@@ -3,6 +3,7 @@
 priv enum Package {
   Deb(@deb.DebPackage)
   Rpm(@rpm.RpmPackage)
+  Arch(@arch.ArchPackage)
 }
 
 ///|
@@ -31,7 +32,18 @@ fn load_package(path : String) -> Package raise CliError {
     let rpm = @rpm.read(data) catch { err => raise rpm_failure(path, err) }
     return Rpm(rpm)
   }
-  raise Failed("\{path}: not a deb or rpm package")
+  // Arch Linux packages are plain, zstd, xz or gzip compressed tar files.
+  let looks_arch = path.contains(".pkg.tar")
+  let arch = @arch.read(data) catch {
+    @arch.ArchError::Corrupt(message~) =>
+      if looks_arch && !message.contains("no .PKGINFO") {
+        raise Mismatch("\{path}: \{message}")
+      } else {
+        raise Failed("\{path}: not a deb, rpm or Arch Linux package")
+      }
+    err => raise Failed("\{path}: \{err}")
+  }
+  Arch(arch)
 }
 
 ///|
@@ -39,6 +51,7 @@ fn Package::report(self : Package, path : String) -> Json raise CliError {
   match self {
     Deb(deb) => deb.to_json()
     Rpm(rpm) => rpm.to_json() catch { err => raise rpm_failure(path, err) }
+    Arch(arch) => arch.to_json()
   }
 }
 
@@ -51,6 +64,7 @@ fn Package::problems(
   match self {
     Deb(deb) => deb.verify()
     Rpm(rpm) => rpm.verify() catch { err => raise rpm_failure(path, err) }
+    Arch(arch) => arch.verify()
   }
 }
 
@@ -59,6 +73,7 @@ fn Package::problems(
 fn Package::checked_files(self : Package) -> Int32 {
   match self {
     Deb(deb) => deb.md5sums.length()
+    Arch(arch) => arch.checked_files()
     Rpm(rpm) => {
       let mut count = 0
       for digest in rpm.header.strings(1035) {

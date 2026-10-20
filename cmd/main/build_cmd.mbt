@@ -46,8 +46,8 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
     Some(f) => f
     None => "all"
   }
-  if format != "deb" && format != "rpm" && format != "all" {
-    raise Usage("unknown format \"\{format}\", expected deb, rpm or all")
+  if format != "deb" && format != "rpm" && format != "arch" && format != "all" {
+    raise Usage("unknown format \"\{format}\", expected deb, rpm, arch or all")
   }
   let forced = match options.value("compression") {
     Some(name) =>
@@ -89,6 +89,29 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
     let target = join_path(out_dir, @rpm.file_name(spec))
     write_bytes(target, rpm)
     println("wrote \{target} (\{rpm.length()} bytes)")
+  }
+  if format == "arch" || format == "all" {
+    let compression = match forced {
+      Some(c) => c
+      None => config.arch_compression()
+    }
+    // `all` is the Debian and RPM families plus Arch Linux where the package
+    // fits Arch (it has no port of every architecture, and its release must
+    // be a number); a package that does not is skipped with a note.
+    try @arch.build(spec, compression~) catch {
+      err =>
+        if format == "arch" {
+          raise Failed("\{config_path}: \{err}")
+        } else {
+          eprintln("linuxpkg: no Arch Linux package: \{err}")
+        }
+    } noraise {
+      pkg => {
+        let target = join_path(out_dir, @arch.file_name(spec, compression~))
+        write_bytes(target, pkg)
+        println("wrote \{target} (\{pkg.length()} bytes)")
+      }
+    }
   }
   0
 }

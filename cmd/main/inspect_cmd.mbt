@@ -187,7 +187,7 @@ fn cmd_inspect(args : Array[String]) -> Int32 raise CliError {
   let options = parse_options(args, Map([]), { "--json": "json" })
   let path = match options.positional {
     [path] => path
-    [] => raise Usage("inspect needs the path of a .deb or .rpm file")
+    [] => raise Usage("inspect needs the path of a package file")
     _ => raise Usage("inspect takes exactly one package file")
   }
   let report = load_package(path).report(path)

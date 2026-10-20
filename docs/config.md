@@ -21,7 +21,7 @@ rejected, and every error names its field (for example `contents[2].dst`). Relat
 | `depends`, `recommends`, `suggests`, `conflicts`, `replaces`, `provides` | string array | `[]` | Relations, see below. |
 | `mtime` | integer | none | Modification time (seconds since the epoch) of the build and of all entries without their own. Falls back to the `SOURCE_DATE_EPOCH` environment variable, then 0. |
 | `compression` | string | `"gzip"` | Compression of the deb members and the rpm payload: `none`, `gzip`, `xz` or `zstd` (`gz` and `zst` are accepted too). See *Compression* below. |
-| `deb`, `rpm` | object | none | Per-format overrides. Only `compression` is allowed, for example `"deb": {"compression": "zstd"}`. |
+| `deb`, `rpm`, `pacman` | object | none | Per-format overrides. Only `compression` is allowed, for example `"deb": {"compression": "zstd"}`. `pacman` is the Arch Linux package (`arch` is already the CPU architecture); its default is `zstd`. |
 | `contents` | object array | `[]` | Files, directories and links, see below. |
 | `scripts` | object | none | `preinstall`, `postinstall`, `preremove`, `postremove`: paths of script files; each must start with `#!` for deb. |
 | `$schema` | string | ignored | For editors. |
@@ -60,12 +60,12 @@ Operators: `<<`/`<`, `<=`, `=`/`==`, `>=`, `>>`/`>`; `<` and `>` are strict. One
 | `mtime` | Per-entry modification time. |
 | `file_info` | nFPM style object holding `mode`, `owner`, `group`, `mtime`. Do not combine it with the flat keys. |
 
-Parent directories: debs list every parent directory automatically; rpms own only the directories you list.
+Parent directories: debs and Arch Linux packages list every parent directory automatically; rpms own only the directories you list.
 
 ## Command line
 
 ```
-linuxpkg build <config.json> [--format deb|rpm|all] [--compression none|gzip|xz|zstd] [--out DIR]
+linuxpkg build <config.json> [--format deb|rpm|arch|all] [--compression none|gzip|xz|zstd] [--out DIR]
 linuxpkg inspect <file.deb|file.rpm> [--json]
 linuxpkg verify  <file.deb|file.rpm>
 linuxpkg repo   <dir> [--format deb|rpm|all]
@@ -77,4 +77,9 @@ linuxpkg init [PATH] [--force]
 Exit status: `0` success; `1` usage error, unreadable file, not a package, or unsupported compression (bzip2);
 `2` `verify` found a damaged or tampered package.
 
-Output names: `name_version-release_arch.deb` and `name-version-release.arch.rpm` (the epoch is not part of file names).
+Output names: `name_version-release_arch.deb`, `name-version-release.arch.rpm` and `name-version-release-arch.pkg.tar.zst`
+(the epoch is not part of the deb and rpm file names; Arch Linux names include it as `name-epoch:version-...`).
+
+`--format all` (the default) writes the deb, the rpm and the Arch Linux package. A package that does not fit Arch Linux
+(architecture without a port, release that is not a number) is skipped with a note; `--format arch` reports the reason as
+an error. Arch Linux packages default to zstd like makepkg, the other formats to gzip.

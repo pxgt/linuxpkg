@@ -29,6 +29,11 @@ All notable changes are recorded here. The format follows
   `Packages.xz`, `Release`) and dnf repodata (`repomd.xml`, primary, filelists, other) in createrepo's layout, with
   `check_apt` / `check_yum` to read them back; `docs/repository.md` also shows how to sign with an external gpg.
 
+- `arch` package, `build --format arch` and `inspect` / `verify` for Arch Linux packages (`.pkg.tar.zst`, also xz, gzip
+  or plain): `.PKGINFO`, a gzip-compressed `.MTREE` with SHA-256 of every file, `.INSTALL` from the maintainer scripts.
+  `Arch::pacman_name`, a `pacman` configuration object (default compression zstd); `--format all` now includes it.
+  Checked with bsdtar, `pacman -U` / `-Qkk` / `-R` in an archlinux container, and the real `makepkg`.
+
 ### Changed
 
 - `Config` gained `compression`, `deb` and `rpm` fields; `PackageSpec` is unchanged.
