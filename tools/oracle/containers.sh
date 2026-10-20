@@ -157,6 +157,7 @@ real_rpm() { # image package
     } > /out/expected.txt
     rpm -qlp "$f" > /out/files.txt
     rpm -K "$f" || true
+    chmod a+rw /out/*
   '
   local real compressor
   real="$(ls "$dir"/"$pkg"-*.rpm | head -n 1)"
