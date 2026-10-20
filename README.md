@@ -116,8 +116,15 @@ linuxpkg repo dist                               # 给 dist 里的包生成 apt 
 - `arch` 接受 `amd64`、`x86_64`、`arm64`、`aarch64`、`all`、`noarch` 等写法，会自动换成 deb / rpm 各自的名字。
 - 版本里的预发布用 `~`（`1.0~rc1`），不要用 `-`。
 - `compression` 选 `none`、`gzip`（默认）、`xz`、`zstd`；也可以按格式覆盖，例如 `"deb": {"compression": "zstd"}`、`"rpm": {"compression": "xz"}`。
-  **实话实说**：现有的纯 MoonBit 压缩库里，xz 编码器压缩率不比 gzip 好、速度约 0.8 MB/s（native，wasm 更慢），zstd 编码器弱得多（文本上约是 gzip 的 2.4 倍大）；
-  产出的包都合法，官方工具都认。所以默认仍是 gzip，只有目标环境要求时才选 xz / zstd。数字见 [docs/formats.md](docs/formats.md)。
+  **实话实说**：现有的纯 MoonBit 压缩库的压缩率赶不上官方工具（实测，越小越好）：
+
+  | 输入 | gzip -9 | xz -6（官方） | zstd -9（官方） | linuxpkg gzip | linuxpkg xz | linuxpkg zstd |
+  |---|---|---|---|---|---|---|
+  | 2.4 MB 源码文本 | 624 KB | 505 KB | 590 KB | 637 KB | **594 KB** | 1 484 KB |
+  | 6 MB 可执行文件和文档 | 2 261 KB | 1 766 KB | 2 098 KB | 2 275 KB | **2 157 KB** | 5 982 KB |
+
+  xz 比 gzip 小约 5–6%（6 MB 在 native 上 1.7 秒），zstd 编码器弱得多（文本上约是 gzip 的 2.4 倍大）；
+  产出的包都合法，官方工具都认。所以默认仍是 gzip，想要更小的包选 xz，目标环境要求时才选 zstd。数字见 [docs/formats.md](docs/formats.md)。
 - 路径必须是绝对路径，不能含 `..`，不能重复；错误信息会指出出错的字段（如 `contents[2].dst`）。
 - 没写 `mtime` 时，用环境变量 `SOURCE_DATE_EPOCH`，再没有就用 0。
 
@@ -173,7 +180,8 @@ linuxpkg repo dist                               # 给 dist 里的包生成 apt 
 - 配置字段命名参考 [nFPM](https://github.com/goreleaser/nfpm)（MIT）。
 - rpm 的头部布局、tag 与不可变区域参考 [google/rpmpack](https://github.com/google/rpmpack)（Apache-2.0）的格式知识，以 rpm 官方工具的实测结果为准，用 MoonBit 重新实现，没有复制代码。
 - 压缩算法来自三个现成的 MoonBit 库：gzip 用 [moonbit-community/flate](https://mooncakes.io/docs/moonbit-community/flate)，
-  zstd 用 [Milky2018/zstd](https://mooncakes.io/docs/Milky2018/zstd)，xz 和 lzma 用
+  zstd 用 [Milky2018/zstd](https://mooncakes.io/docs/Milky2018/zstd)，xz 写入用
+  [lin2077-zeming/moonxz](https://mooncakes.io/docs/lin2077-zeming/moonxz)，xz 读取和 `.lzma` 用
   [aurora0x27/lzma-mbt](https://mooncakes.io/docs/aurora0x27/lzma-mbt)；摘要来自 `moonbitlang/x/crypto`。
 
 详见 [THIRD_PARTY.md](THIRD_PARTY.md)。

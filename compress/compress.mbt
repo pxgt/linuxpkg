@@ -152,6 +152,9 @@ pub fn detect(data : BytesView) -> Compression {
 const ZSTD_LEVEL : Int32 = 9
 
 ///|
+const XZ_LEVEL : Int32 = 9
+
+///|
 const CHUNK : Int32 = 65536
 
 ///|
@@ -159,8 +162,8 @@ const CHUNK : Int32 = 65536
 const XZ_MEMLIMIT : UInt64 = 268435456UL
 
 ///|
-/// Compress `data`. Gzip uses the pure-MoonBit flate package, xz the
-/// lzma-mbt encoder at its default preset and zstd level 9 (see
+/// Compress `data`. Gzip uses the pure-MoonBit flate package, xz the moonxz
+/// encoder at level 9 and zstd level 9 (see
 /// `docs/formats.md` for the measured ratios). The output depends only on
 /// the input, so builds stay reproducible. `Lzma` cannot be written.
 pub fn compress(
@@ -171,12 +174,10 @@ pub fn compress(
     None => data.to_owned()
     Gzip => @gzip.compress(data.to_owned())
     Xz =>
-      @lzma.encode(data, options={
-        ..@lzma.EncodeOptions::default(),
-        format: @lzma.Format::Xz,
-      }) catch {
-        _ => raise Corrupt("xz: the encoder failed")
-      }
+      @moonxz.compress_with_options(
+        data.to_owned(),
+        @moonxz.CompressionOptions::new(level=XZ_LEVEL),
+      )
     Zstd =>
       @zstd.compress(data.to_owned(), level=ZSTD_LEVEL, checksum=true) catch {
         _ => raise Corrupt("zstd: the encoder failed")

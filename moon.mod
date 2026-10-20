@@ -19,4 +19,5 @@ import {
   "moonbitlang/x@0.5.5",
   "Milky2018/zstd@0.1.4",
   "aurora0x27/lzma-mbt@0.1.0",
+  "lin2077-zeming/moonxz@0.4.4",
 }

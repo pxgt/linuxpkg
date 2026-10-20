@@ -32,8 +32,8 @@ The format-specific setting wins over the package-wide one, and `--compression` 
 both. The default stays `gzip` because it is the best trade-off with the compressors available in MoonBit:
 
 - `gzip`: smallest result and fast. Understood by every dpkg and rpm.
-- `xz`: valid, accepted by `dpkg` and `rpm`, but the encoder is slow (about 0.8 MB/s native, slower on wasm) and its
-  output is not smaller than gzip. rpm gets `rpmlib(PayloadIsXz)` in its requirements.
+- `xz`: valid, accepted by `xz -t`, `dpkg` and `rpm`; about 5–6 % smaller than gzip (the reference `xz -6` is 20 % smaller still)
+  and fast enough (about 3.5 MB/s native, slower on wasm). rpm gets `rpmlib(PayloadIsXz)` in its requirements.
 - `zstd`: for targets that require it. The encoder is far weaker than the reference `zstd` (about 2.4× the size of
   gzip on text), but the package is valid; rpm gets `rpmlib(PayloadIsZstd)`.
 - `none`: uncompressed, useful for debugging and for repositories that compress themselves.

@@ -11,7 +11,7 @@ The `compress` package is the single place where bytes are compressed or unpacke
 |---|---|---|---|
 | none | — | — | `data.tar`, rpm `PAYLOADCOMPRESSOR identity` |
 | gzip | [moonbit-community/flate](https://mooncakes.io/docs/moonbit-community/flate) | same | default |
-| xz | [aurora0x27/lzma-mbt](https://mooncakes.io/docs/aurora0x27/lzma-mbt) | same | CRC32/CRC64/SHA-256 checks, several blocks and streams |
+| xz | [lin2077-zeming/moonxz](https://mooncakes.io/docs/lin2077-zeming/moonxz) level 9 (CRC64) | [aurora0x27/lzma-mbt](https://mooncakes.io/docs/aurora0x27/lzma-mbt) | CRC32/CRC64/SHA-256 checks, several blocks and streams |
 | zstd | [Milky2018/zstd](https://mooncakes.io/docs/Milky2018/zstd) level 9 | same | frame checksum written; skippable and concatenated frames read |
 | lzma (`.lzma`) | not written | lzma-mbt | old `lzma_alone` files, e.g. `data.tar.lzma` |
 | bzip2 | not supported | not supported | no pure-MoonBit implementation exists; reported as `Unsupported` |
@@ -29,16 +29,18 @@ signature (`1f 8b`, `fd 37 7a 58 5a 00`, `28 b5 2f fd`, plausible `.lzma` header
 - `.lzma` files that store their size are checked against the limit; files without a stored size are only
   unpacked when the input is small enough (`input × 4096 ≤ limit`).
 
-**What the compressors achieve** (measured with the release build on wasm-gc; the real tools for comparison):
+**What the compressors achieve** (measured with the release build; the real tools for comparison):
 
 | Input | gzip -9 | xz -6 | zstd -9 | linuxpkg gzip | linuxpkg xz | linuxpkg zstd (level 9) |
 |---|---|---|---|---|---|---|
-| 2.4 MB of source text | 624 KB | 505 KB | 590 KB | 637 KB | 690 KB | 1 484 KB |
-| 6 MB of executables and docs | 2 261 KB | 1 766 KB | 2 098 KB | 2 275 KB | 2 253 KB | 5 982 KB |
+| 2.4 MB of source text | 624 KB | 505 KB | 590 KB | 637 KB | **594 KB** | 1 484 KB |
+| 6 MB of executables and docs | 2 261 KB | 1 766 KB | 2 098 KB | 2 275 KB | **2 157 KB** | 5 982 KB |
 
-- The xz encoder in lzma-mbt always writes one block with a fixed strategy (the preset has no effect on the output)
-  and is slow: a 6 MB tree takes 7.6 s on the native backend (about 0.8 MB/s; the wasm backends are several times
-  slower). Its output is valid (`xz -t`, `dpkg`, `rpm` accept it) but 10–40 % larger than `xz -6`.
+- The xz encoder is moonxz (level 9, 8 MiB dictionary, one block). Its output passes the reference `xz -t` and is
+  accepted by `dpkg` and `rpm`; it is about 6 % smaller than gzip on text and 5 % on executables, but still 18–22 %
+  larger than `xz -6`. A 6 MB tree takes 1.7 s on the native backend (the wasm backends are several times slower).
+  linuxpkg used `lzma-mbt`'s encoder in 0.3.0; it produced output *larger* than gzip (690 KB and 2 253 KB for the two
+  inputs above) and took 7.6 s, so xz writing moved to moonxz. Reading (xz and `.lzma`) still uses lzma-mbt.
 - The zstd encoder only compresses from level 9 up. At levels 1–7 it stores blocks uncompressed, and no
   level reaches the ratio of the reference `zstd` (levels above 9 gain under 1 %), so linuxpkg uses level 9.
   Packages with a zstd payload are therefore **valid but larger than gzip ones**; choose zstd when the target
