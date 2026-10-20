@@ -393,11 +393,69 @@ PY
   docker run --rm -v "$dir:/out" archlinux:latest sh -c 'rm -rf /out/*'
 }
 
+# ---- Alpine Linux: apk installs the package, the repository gives a reference
+apk_check() {
+  step "alpine:3.20: apk add --allow-untrusted, audit, del"
+  docker run --rm -v "$WORK/pkgs/gzip:/pkgs:ro" alpine:3.20 sh -ec '
+    apk add --allow-untrusted /pkgs/hello-1.0.0-r1.apk
+    test "$(hello)" = "hello from linuxpkg"
+    test "$(hi)" = "hello from linuxpkg"
+    test "$(cat /var/lib/hello/state)" = installed
+    test -f /etc/hello.conf
+    apk info -L hello
+    apk info hello | head -n 3
+    # Nothing of the package may differ from the checksums apk recorded.
+    apk audit --full | grep -E " (usr/bin/(hello|hi)|etc/hello.conf|usr/share/doc/hello|var/lib/hello)" && exit 1
+    apk del hello
+    test ! -e /usr/bin/hello
+    test ! -e /var/lib/hello/state
+    echo "apk check passed on $(. /etc/os-release && echo "$PRETTY_NAME")"
+  '
+}
+
+apk_real() {
+  step "alpine:3.20: linuxpkg reads and verifies packages from Alpine's build servers"
+  local dir="$WORK/real-alpine"
+  mkdir -p "$dir"
+  docker run --rm -v "$dir:/out" alpine:3.20 sh -ec '
+    apk update >/dev/null
+    apk fetch -o /out tree busybox-binsh >/dev/null
+    apk add tree busybox-binsh >/dev/null
+    for p in tree busybox-binsh; do
+      f=$(ls /out/$p-*.apk)
+      apk info -qL $p | sort > ${f%.apk}.files
+    done
+    chmod a+rw /out/*
+  '
+  local f
+  for f in "$dir"/tree-*.apk "$dir"/busybox-binsh-*.apk; do
+    "$BIN" inspect "$f"
+    "$BIN" inspect "$f" --json >"$dir/report.json"
+    python3 - "$dir/report.json" "${f%.apk}.files" "$(basename "$f")" <<'PY'
+import json, re, sys
+report = json.load(open(sys.argv[1]))
+listed = sorted(l for l in open(sys.argv[2]).read().splitlines() if l)
+name, version, release = re.match(r"(.+)-([0-9][^-]*)-r([0-9]+)\.apk$", sys.argv[3]).groups()
+assert report["name"] == name, (report["name"], name)
+assert report["version"] == version and report["release"] == release, (report["version"], report["release"])
+ours = sorted(f["path"].lstrip("/") for f in report["files"] if f["type"] != "dir")
+assert ours == listed, (ours, listed)
+print("  ok: name, version, release and %d file names agree with apk info" % len(ours))
+PY
+    "$BIN" verify "$f" | tee "$dir/verify.out"
+    grep -q "OK (" "$dir/verify.out" || die "$f: verify did not report OK"
+    echo "  ok: $(basename "$f") verified in full (exit 0)"
+  done
+  docker run --rm -v "$dir:/out" alpine:3.20 sh -c 'rm -rf /out/*'
+}
+
 run_deb debian:12
 run_deb ubuntu:24.04
 run_rpm fedora:41
 arch_check
 arch_real
+apk_check
+apk_real
 repo_deb debian:12
 repo_deb ubuntu:24.04
 repo_rpm fedora:41

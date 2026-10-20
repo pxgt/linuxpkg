@@ -339,3 +339,72 @@ pub fn decompress(
     Lzma => unlzma(data, max_size)
   }
 }
+
+///|
+/// Split a file made of several gzip streams (Alpine packages are three of
+/// them in a row) into its members. Each element is the member as stored
+/// (compressed) together with what it unpacks to. `max_size` bounds the
+/// total unpacked size of all members.
+///
+/// # Example
+/// ```mbt check
+/// test {
+///   let a = @compress.compress(b"one", Gzip)
+///   let b = @compress.compress(b"two", Gzip)
+///   let members = @compress.gzip_members(Bytes::from_array([..a, ..b]))
+///   assert_eq(members.map(m => m.1), [b"one", b"two"])
+///   assert_eq(members[0].0, a)
+/// }
+/// ```
+pub fn gzip_members(
+  data : BytesView,
+  max_size~ : Int32 = 1073741824,
+) -> Array[(Bytes, Bytes)] raise CompressError {
+  if data.length() == 0 {
+    raise Corrupt("gzip: input too short")
+  }
+  let members : Array[(Bytes, Bytes)] = []
+  let mut pos = 0
+  let mut total = 0
+  while pos < data.length() {
+    let decoder = @gzip.Decoder(multistream=false)
+    let out = Buffer(size_hint=1024)
+    let chunk : FixedArray[Byte] = FixedArray::make(CHUNK, b'\x00')
+    let mut used = 0
+    while true {
+      let status = decoder.step_into(data[pos + used:], chunk, end=true) catch {
+        @gzip.GzipError::GzipError(_, message) =>
+          raise Corrupt(
+            if message.has_prefix("gzip") {
+              message
+            } else {
+              "gzip: \{message}"
+            },
+          )
+      }
+      let consumed = decoder.last_consumed()
+      let produced = decoder.last_produced()
+      used += consumed
+      if total + out.length() + produced > max_size {
+        raise TooLarge(max_size)
+      }
+      out.write_bytes(Bytes::from_array(chunk[0:produced]))
+      match status {
+        Done => break
+        NeedMoreInput => raise Corrupt("gzip: input too short")
+        NeedMoreOutput =>
+          if produced == 0 && consumed == 0 {
+            raise Corrupt("gzip: decoder made no progress")
+          }
+      }
+    }
+    let length = used - decoder.unused_input().length()
+    if length <= 0 {
+      raise Corrupt("gzip: decoder made no progress")
+    }
+    members.push((data[pos:pos + length].to_owned(), out.to_bytes()))
+    total += out.length()
+    pos += length
+  }
+  members
+}

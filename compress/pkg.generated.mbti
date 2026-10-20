@@ -12,6 +12,8 @@ pub fn decompress(BytesView, Compression, max_size? : Int32) -> Bytes raise Comp
 
 pub fn detect(BytesView) -> Compression
 
+pub fn gzip_members(BytesView, max_size? : Int32) -> Array[(Bytes, Bytes)] raise CompressError
+
 // Errors
 pub(all) suberror CompressError {
   Corrupt(String)

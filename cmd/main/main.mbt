@@ -14,8 +14,8 @@ const USAGE : String =
   #|linuxpkg - build Debian, RPM and Arch Linux packages without dpkg-deb or rpmbuild
   #|
   #|Usage:
-  #|  linuxpkg build <config.json> [--format deb|rpm|arch|all] [--compression C] [--out DIR]
-  #|  linuxpkg inspect <package> [--json]      (.deb, .rpm or .pkg.tar.*)
+  #|  linuxpkg build <config.json> [--format deb|rpm|arch|apk|all] [--compression C] [--out DIR]
+  #|  linuxpkg inspect <package> [--json]      (.deb, .rpm, .apk or .pkg.tar.*)
   #|  linuxpkg verify <package>
   #|  linuxpkg repo <dir> [--format deb|rpm|all]
   #|  linuxpkg init [PATH] [--force]
@@ -29,8 +29,8 @@ const USAGE : String =
   #|  init     Write an example linuxpkg.json to edit.
   #|
   #|Options:
-  #|  -f, --format FORMAT  Package format to build or index: deb, rpm, arch or all
-  #|                       (default; build skips arch where it does not fit).
+  #|  -f, --format FORMAT  Package format to build or index: deb, rpm, arch, apk or all
+  #|                       (default; build skips arch and apk where they do not fit).
   #|  -z, --compression C  Payload compression: none, gzip, xz or zstd. Overrides
   #|                       the configuration (default: gzip).
   #|  -o, --out DIR        Directory for the packages (default: current directory).

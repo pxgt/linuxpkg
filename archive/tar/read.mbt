@@ -125,6 +125,8 @@ priv struct Overrides {
   mut mtime : Int64?
   mut uname : Bytes?
   mut gname : Bytes?
+  /// Records this reader has no use for (`APK-TOOLS.checksum.SHA1`, ...).
+  extra : Array[(String, String)]
 }
 
 ///|
@@ -138,6 +140,7 @@ fn Overrides::new() -> Overrides {
     mtime: None,
     uname: None,
     gname: None,
+    extra: [],
   }
 }
 
@@ -190,7 +193,7 @@ fn apply_pax(
       "mtime" => overrides.mtime = Some(pax_number(value, key, at))
       "uname" => overrides.uname = Some(value.to_owned())
       "gname" => overrides.gname = Some(value.to_owned())
-      _ => ()
+      _ => overrides.extra.push((key, @utf8.decode_lossy(value)))
     }
     pos += len
   }
@@ -231,7 +234,19 @@ pub fn parse(
   archive : BytesView,
   max_entries~ : Int32 = 1000000,
 ) -> Array[Entry] raise TarError {
-  let entries : Array[Entry] = []
+  parse_with_records(archive, max_entries~).map(item => item.0)
+}
+
+///|
+/// Like `parse`, and also returns the PAX records of each entry that the
+/// reader itself does not interpret (everything but `path`, `linkpath`,
+/// `size`, `uid`, `gid`, `mtime`, `uname` and `gname`), for example Alpine's
+/// `APK-TOOLS.checksum.SHA1`.
+pub fn parse_with_records(
+  archive : BytesView,
+  max_entries~ : Int32 = 1000000,
+) -> Array[(Entry, Array[(String, String)])] raise TarError {
+  let entries : Array[(Entry, Array[(String, String)])] = []
   let overrides = Overrides::new()
   let mut gnu_path : Bytes? = None
   let mut gnu_link : Bytes? = None
@@ -324,7 +339,7 @@ pub fn parse(
           Some(v) => v
           None => read_number(block, 136, 12, "mtime", pos)
         }
-        entries.push({
+        let entry : Entry = {
           path: @utf8.decode_lossy(name),
           kind,
           mode: (read_number(block, 100, 8, "mode", pos) & 0o7777L).to_int(),
@@ -333,7 +348,9 @@ pub fn parse(
           uname: @utf8.decode_lossy(uname),
           gname: @utf8.decode_lossy(gname),
           mtime,
-        })
+        }
+        entries.push((entry, overrides.extra.copy()))
+        overrides.extra.clear()
         // Extensions apply to one entry only.
         gnu_path = None
         gnu_link = None

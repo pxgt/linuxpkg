@@ -34,6 +34,12 @@ All notable changes are recorded here. The format follows
   `Arch::pacman_name`, a `pacman` configuration object (default compression zstd); `--format all` now includes it.
   Checked with bsdtar, `pacman -U` / `-Qkk` / `-R` in an archlinux container, and the real `makepkg`.
 
+- `apk` package and `build --format apk` (`inspect` / `verify` recognise `.apk` too): Alpine Linux packages, format 2 — a
+  control stream with `.PKGINFO` and scripts, a data stream with `APK-TOOLS.checksum.SHA1` PAX records, `datahash`.
+  `tar.build_with_records` / `parse_with_records` carry extra PAX records and allow an archive without end marker;
+  `compress.gzip_members` splits files made of several gzip streams. `--format all` now includes apk too.
+  Checked with Python's tarfile, the real apk-tools (`apk add`, `apk audit`) and an alpine container.
+
 ### Changed
 
 - `Config` gained `compression`, `deb` and `rpm` fields; `PackageSpec` is unchanged.

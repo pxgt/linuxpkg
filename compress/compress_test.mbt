@@ -415,3 +415,48 @@ test "hand-made xz streams: hostile structure" {
   let odd_padding = Bytes::from_array([..good, 0, 0])
   assert_true(!unpack_error(odd_padding, Xz).has_prefix("ok"))
 }
+
+///|
+test "gzip members are split with their stored bytes" {
+  let a = @compress.compress(b"one", Gzip)
+  let b = @compress.compress(Bytes::make(100000, b'x'), Gzip)
+  let c = @compress.compress(b"", Gzip)
+  let all = Bytes::from_array([..a, ..b, ..c])
+  let members = @compress.gzip_members(all)
+  assert_eq(members.length(), 3)
+  assert_eq(members[0].0, a)
+  assert_eq(members[1].0, b)
+  assert_eq(members[2].0, c)
+  assert_eq(members[0].1, b"one")
+  assert_eq(members[1].1.length(), 100000)
+  assert_eq(members[2].1, b"")
+  // The total is limited, not each member.
+  try @compress.gzip_members(all, max_size=100002) catch {
+    TooLarge(limit) => assert_eq(limit, 100002)
+    err => fail("unexpected \{err}")
+  } noraise {
+    _ => fail("expected the limit to be hit")
+  }
+  // Damage, trailing garbage, empty input.
+  assert_true(
+    try @compress.gzip_members(b"") catch {
+      _ => true
+    } noraise {
+      _ => false
+    },
+  )
+  assert_true(
+    try @compress.gzip_members(Bytes::from_array([..a, 1, 2, 3])) catch {
+      _ => true
+    } noraise {
+      _ => false
+    },
+  )
+  assert_true(
+    try @compress.gzip_members(a[0:a.length() - 3]) catch {
+      _ => true
+    } noraise {
+      _ => false
+    },
+  )
+}

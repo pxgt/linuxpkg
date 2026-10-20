@@ -20,6 +20,7 @@ PACKAGES = (
     "Xpeng/linuxpkg/compress",
     "Xpeng/linuxpkg/repo",
     "Xpeng/linuxpkg/arch",
+    "Xpeng/linuxpkg/apk",
 )
 TOTAL = re.compile(r"^Total:\s+(\d+)/(\d+)\s*$", re.MULTILINE)
 
