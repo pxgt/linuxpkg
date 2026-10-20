@@ -84,7 +84,7 @@ jobs:
         run: moon update
 
       - name: Install the official packaging tools
-        run: sudo apt-get update && sudo apt-get install -y lintian rpm rpm2cpio cpio
+        run: sudo apt-get update && sudo apt-get install -y lintian rpm rpm2cpio cpio createrepo-c apt-utils xz-utils
 
       - name: Compare linuxpkg output with dpkg and friends
         run: tools/oracle/run.sh

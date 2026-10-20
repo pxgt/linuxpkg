@@ -48,7 +48,11 @@ The script checks, in order:
 6. **Self-hosting**: linuxpkg packages its own release binary (`examples/self`), the deb is installed and the
    installed `linuxpkg` rebuilds the hello deb byte for byte.
 7. **Reproducibility**: repeated builds are identical; `SOURCE_DATE_EPOCH` controls the timestamps.
-8. **Compression**: the example is built with `--compression xz|zstd|none`; `dpkg-deb` lists, extracts and checks md5sums,
+8. **Repositories**: `linuxpkg repo` on a directory of debs makes a flat apt repository: its `Packages` has the same
+   fields and values as `apt-ftparchive packages .`, `apt-get update` accepts it and `apt-get install` resolves a
+   dependency through it. For rpms, `filelists.xml` and `other.xml` are compared with `createrepo_c`, and `primary.xml`
+   too (apart from createrepo_c condensing `libc.so.6(GLIBC_*)` requirements).
+9. **Compression**: the example is built with `--compression xz|zstd|none`; `dpkg-deb` lists, extracts and checks md5sums,
    `dpkg -i`, `dpkg --verify` and `dpkg -P` pass; `rpm -K` and `Payload SHA256 digest: OK`, the `rpmlib(PayloadIsXz)` /
    `rpmlib(PayloadIsZstd)` requirements in `rpm -qp --requires`, `rpm2cpio | cpio`, a private-root install and `rpm -V`
    pass. A configuration with `"compression": "xz"` and `"rpm": {"compression": "zstd"}` is checked too.
@@ -63,6 +67,11 @@ Installs the deb in `debian:12` and `ubuntu:24.04` and the rpm (`rpm -ivh` and `
 `openeuler/openeuler:24.03-lts` (falling back to `rockylinux:9` if that image cannot be pulled), once for each of
 gzip, xz, zstd and no compression. Inside each container it runs the program, checks the maintainer script marker,
 runs `dpkg --verify` / `rpm -V`, removes the package and checks the removal.
+
+It also builds a repository from a hello package and a package depending on it, and installs the dependent package
+with the container's own tools: `apt-get install` in `debian:12` and `ubuntu:24.04` (with `[trusted=yes]`), and
+`dnf install` in `fedora:41` and openEuler (with `gpgcheck=0`). The repository commands run twice must give
+identical files.
 
 It also reads **genuine distribution packages** with the distribution's own downloader and compares
 `inspect --json` with `dpkg-deb` / `rpm -qp` (name, version, architecture, compression, file list), then runs `verify`

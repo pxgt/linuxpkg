@@ -1,0 +1,11 @@
+import {
+  "Xpeng/linuxpkg/compress",
+  "Xpeng/linuxpkg/deb",
+  "Xpeng/linuxpkg/rpm",
+  "moonbitlang/x/crypto",
+  "moonbitlang/core/encoding/utf8",
+}
+
+import {
+  "Xpeng/linuxpkg/spec",
+} for "test"

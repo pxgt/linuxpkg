@@ -25,6 +25,10 @@ All notable changes are recorded here. The format follows
   with `dpkg`, `rpm` and `rpm2cpio`; the container job installs every compression in Debian, Ubuntu, Fedora and
   openEuler and verifies the distributions' own `hello` / `tree` packages.
 
+- `repo` package and `linuxpkg repo <dir> [--format deb|rpm|all]`: apt flat repository (`Packages`, `Packages.gz`,
+  `Packages.xz`, `Release`) and dnf repodata (`repomd.xml`, primary, filelists, other) in createrepo's layout, with
+  `check_apt` / `check_yum` to read them back; `docs/repository.md` also shows how to sign with an external gpg.
+
 ### Changed
 
 - `Config` gained `compression`, `deb` and `rpm` fields; `PackageSpec` is unchanged.

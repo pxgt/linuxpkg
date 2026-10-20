@@ -17,6 +17,7 @@ const USAGE : String =
   #|  linuxpkg build <config.json> [--format deb|rpm|all] [--compression C] [--out DIR]
   #|  linuxpkg inspect <file.deb|file.rpm> [--json]
   #|  linuxpkg verify <file.deb|file.rpm>
+  #|  linuxpkg repo <dir> [--format deb|rpm|all]
   #|  linuxpkg init [PATH] [--force]
   #|  linuxpkg --version
   #|
@@ -24,10 +25,11 @@ const USAGE : String =
   #|  build    Build packages described by a linuxpkg.json file.
   #|  inspect  Show the metadata and files of a package.
   #|  verify   Check the checksums of a package.
+  #|  repo     Write apt and dnf repository metadata for the packages in a directory.
   #|  init     Write an example linuxpkg.json to edit.
   #|
   #|Options:
-  #|  -f, --format FORMAT  Package format to build: deb, rpm or all (default).
+  #|  -f, --format FORMAT  Package format to build or index: deb, rpm or all (default).
   #|  -z, --compression C  Payload compression: none, gzip, xz or zstd. Overrides
   #|                       the configuration (default: gzip).
   #|  -o, --out DIR        Directory for the packages (default: current directory).
@@ -85,6 +87,7 @@ fn dispatch(command : String, args : Array[String]) -> Int32 raise CliError {
     "init" => cmd_init(args)
     "inspect" => cmd_inspect(args)
     "verify" => cmd_verify(args)
+    "repo" => cmd_repo(args)
     _ => raise Usage("unknown command \"\{command}\"")
   }
 }

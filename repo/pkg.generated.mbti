@@ -1,0 +1,37 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Xpeng/linuxpkg/repo"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn apt_index(Array[PackageFile], date~ : Int64) -> Array[(String, Bytes)] raise RepoError
+
+pub fn check_apt(Array[(String, Bytes)], Array[PackageFile]) -> Array[String]
+
+pub fn check_yum(Array[(String, Bytes)], Array[PackageFile]) -> Array[String]
+
+pub fn deb_time(PackageFile) -> Int64 raise RepoError
+
+pub fn rfc2822(Int64) -> String
+
+pub fn rpm_time(PackageFile) -> Int64 raise RepoError
+
+pub fn yum_index(Array[PackageFile], timestamp~ : Int64) -> Array[(String, Bytes)] raise RepoError
+
+// Errors
+pub(all) suberror RepoError {
+  Invalid(file~ : String, message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for RepoError
+
+// Types and methods
+pub(all) struct PackageFile {
+  name : String
+  data : Bytes
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
