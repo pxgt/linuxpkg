@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-20
+
 ### Added
 
 - `compress` package: one place for gzip, xz, zstd, `.lzma` (read-only) and uncompressed streams —
