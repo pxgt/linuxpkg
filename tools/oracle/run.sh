@@ -543,6 +543,101 @@ print("  ok: inspect --json reads the relations back")
 PY
 fi
 
+# ---------------------------------------------------------------- repositories
+step "repo: apt flat repository and dnf repodata"
+REPOD="$WORK/repo"
+mkdir -p "$REPOD/deb" "$REPOD/rpm" "$REPOD/demo"
+printf '#!/bin/sh\necho demo from linuxpkg\n' >"$REPOD/demo/demo.sh"
+cat >"$REPOD/demo/linuxpkg.json" <<'JSON'
+{
+  "name": "linuxpkg-demo",
+  "version": "2.0",
+  "arch": "all",
+  "maintainer": "Demo <demo@example.org>",
+  "description": "Demo package\nDepends on hello so that the index has to resolve it.",
+  "mtime": 1700000000,
+  "depends": ["hello (>= 1.0)"],
+  "contents": [{ "src": "demo.sh", "dst": "/usr/bin/linuxpkg-demo", "mode": "0755" }]
+}
+JSON
+"$BIN" build "$EXAMPLE" --format deb --compression zstd --out "$REPOD/deb"
+"$BIN" build "$REPOD/demo/linuxpkg.json" --format deb --compression xz --out "$REPOD/deb"
+"$BIN" repo "$REPOD/deb" --format deb
+expect_in "Release has a Date" "Date: " "$(cat "$REPOD/deb/Release")"
+expect_in "Packages lists the demo" "Filename: ./linuxpkg-demo_2.0-1_all.deb" "$(cat "$REPOD/deb/Packages")"
+if command -v apt-ftparchive >/dev/null 2>&1; then
+  # The same stanzas as apt-ftparchive writes (it orders the fields its own way
+  # and adds a SHA512 line), compared field by field.
+  (cd "$REPOD/deb" && apt-ftparchive packages .) >"$WORK/ref-Packages"
+  python3 - "$WORK/ref-Packages" "$REPOD/deb/Packages" <<'PY'
+import sys
+def stanzas(path):
+    out = {}
+    for block in open(path, encoding="utf-8").read().split("\n\n"):
+        if not block.strip():
+            continue
+        fields, key = {}, None
+        for line in block.split("\n"):
+            if line.startswith(" "):
+                fields[key] += "\n" + line
+            else:
+                key, value = line.split(":", 1)
+                fields[key] = value
+        out[fields["Package"].strip()] = fields
+    return out
+ref, ours = stanzas(sys.argv[1]), stanzas(sys.argv[2])
+assert sorted(ref) == sorted(ours), (sorted(ref), sorted(ours))
+for name in ref:
+    r = dict(ref[name]); r.pop("SHA512", None)
+    assert r == ours[name], (name, r, ours[name])
+print("  ok: Packages has the same fields and values as apt-ftparchive's (except its SHA512) for %d packages" % len(ref))
+PY
+fi
+xz -t "$REPOD/deb/Packages.xz" 2>/dev/null && pass "xz -t accepts Packages.xz" || echo "  xz not installed, skipped"
+gzip -t "$REPOD/deb/Packages.gz" && pass "gzip -t accepts Packages.gz"
+APT_OPTS="-o Dir::Etc::sourcelist=$WORK/repo.list -o Dir::Etc::sourceparts=/dev/null -o Dir::State::lists=$WORK/apt-lists -o Dir::Cache=$WORK/apt-cache"
+echo "deb [trusted=yes] file:$REPOD/deb ./" >"$WORK/repo.list"
+mkdir -p "$WORK/apt-lists/partial" "$WORK/apt-cache/archives/partial"
+$SUDO apt-get $APT_OPTS update >"$WORK/apt-update.txt" 2>&1 || { cat "$WORK/apt-update.txt"; die "apt-get update failed"; }
+expect_in "apt sees the demo package" "linuxpkg-demo" "$(apt-cache $APT_OPTS policy linuxpkg-demo)"
+$SUDO apt-get $APT_OPTS install -y linuxpkg-demo >"$WORK/apt-install.txt" 2>&1 || { cat "$WORK/apt-install.txt"; die "apt-get install failed"; }
+expect_eq "apt installed hello as a dependency" "$(/usr/bin/hello)" "hello from linuxpkg"
+expect_eq "apt installed the demo" "$(/usr/bin/linuxpkg-demo)" "demo from linuxpkg"
+$SUDO apt-get $APT_OPTS remove -y linuxpkg-demo hello >/dev/null 2>&1
+$SUDO dpkg -P hello linuxpkg-demo >/dev/null 2>&1 || true
+[ ! -e /usr/bin/linuxpkg-demo ] || die "demo still installed"
+pass "apt-get update / install (with a dependency) / remove work against the generated repository"
+if [ "$HAVE_RPM" = 1 ]; then
+  "$BIN" build "$EXAMPLE" --format rpm --compression zstd --out "$REPOD/rpm"
+  "$BIN" build "$REPOD/demo/linuxpkg.json" --format rpm --compression xz --out "$REPOD/rpm"
+  "$BIN" build "$DEPS/linuxpkg.json" --format rpm --out "$REPOD/rpm"
+  "$BIN" repo "$REPOD/rpm" --format rpm
+  [ -f "$REPOD/rpm/repodata/repomd.xml" ] || die "repomd.xml missing"
+  if command -v createrepo_c >/dev/null 2>&1; then
+    mkdir -p "$REPOD/ref" && cp "$REPOD"/rpm/*.rpm "$REPOD/ref/"
+    createrepo_c --no-database "$REPOD/ref" >/dev/null 2>&1
+    python3 - "$REPOD/ref/repodata" "$REPOD/rpm/repodata" <<'PY'
+import glob, gzip, re, sys
+def blocks(path):
+    text = gzip.open(path, "rt", encoding="utf-8").read()
+    text = re.sub(r'<time file="[0-9]+"', '<time file="T"', text)
+    out = {}
+    for part in re.split(r'(?=<package[ >])', text)[1:]:
+        part = re.sub(r'</(metadata|filelists|otherdata)>\s*$', '', part).strip()
+        name = re.search(r'<name>([^<]*)</name>|name="([^"]*)"', part)
+        out[name.group(1) or name.group(2)] = part
+    return out
+for kind in ("primary", "filelists", "other"):
+    ref = blocks(glob.glob(sys.argv[1] + "/*-" + kind + ".xml.gz")[0])
+    ours = blocks(glob.glob(sys.argv[2] + "/*-" + kind + ".xml.gz")[0])
+    assert sorted(ref) == sorted(ours), (kind, sorted(ref), sorted(ours))
+    for name in ref:
+        assert ref[name] == ours[name], "%s of %s differs from createrepo_c:\n%s\n----\n%s" % (kind, name, ref[name], ours[name])
+    print("  ok: %s.xml for %d packages is identical to createrepo_c's" % (kind, len(ref)))
+PY
+  fi
+fi
+
 # ---------------------------------------------------------------- self-hosting
 step "linuxpkg packages itself (examples/self)"
 SELF_TARGET="${TARGET_DIR:-$ROOT/_build}"

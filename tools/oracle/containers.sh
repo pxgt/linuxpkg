@@ -205,9 +205,86 @@ PY
   echo "  ok: $label verified in full (exit 0)"
 }
 
+# A second package that depends on hello, so that installing it from the
+# generated repository has to resolve a dependency through the index.
+mkdir -p "$WORK/demo"
+printf '#!/bin/sh\necho demo from linuxpkg\n' >"$WORK/demo/demo.sh"
+cat >"$WORK/demo/linuxpkg.json" <<'JSON'
+{
+  "name": "linuxpkg-demo",
+  "version": "2.0",
+  "arch": "all",
+  "maintainer": "Demo <demo@example.org>",
+  "description": "Demo package\nDepends on hello so that the repository index has to resolve it.",
+  "mtime": 1700000000,
+  "depends": ["hello (>= 1.0)"],
+  "contents": [{ "src": "demo.sh", "dst": "/usr/bin/linuxpkg-demo", "mode": "0755" }]
+}
+JSON
+
+step "building the package repositories (apt flat repository and dnf repodata)"
+mkdir -p "$WORK/repo-deb" "$WORK/repo-rpm"
+"$BIN" build examples/hello/linuxpkg.json --format deb --compression zstd --out "$WORK/repo-deb"
+"$BIN" build "$WORK/demo/linuxpkg.json" --format deb --compression xz --out "$WORK/repo-deb"
+"$BIN" build examples/hello/linuxpkg.json --format rpm --compression zstd --out "$WORK/repo-rpm"
+"$BIN" build "$WORK/demo/linuxpkg.json" --format rpm --compression xz --out "$WORK/repo-rpm"
+"$BIN" repo "$WORK/repo-deb"
+"$BIN" repo "$WORK/repo-rpm"
+# Running it again must not change a byte.
+cp -r "$WORK/repo-deb" "$WORK/repo-deb.1"
+cp -r "$WORK/repo-rpm" "$WORK/repo-rpm.1"
+"$BIN" repo "$WORK/repo-deb" >/dev/null
+"$BIN" repo "$WORK/repo-rpm" >/dev/null
+diff -r "$WORK/repo-deb" "$WORK/repo-deb.1"
+diff -r "$WORK/repo-rpm" "$WORK/repo-rpm.1"
+chmod -R a+rX "$WORK/repo-deb" "$WORK/repo-rpm"
+
+repo_deb() { # image
+  local image="$1"
+  step "$image: apt-get install from the generated repository"
+  docker run --rm -v "$WORK/repo-deb:/repo:ro" "$image" bash -ec '
+    echo "deb [trusted=yes] file:/repo ./" > /etc/apt/linuxpkg.list
+    O="-o Dir::Etc::sourcelist=/etc/apt/linuxpkg.list -o Dir::Etc::sourceparts=/dev/null"
+    apt-get $O update
+    apt-get $O install -y linuxpkg-demo
+    test "$(hello)" = "hello from linuxpkg"
+    test "$(linuxpkg-demo)" = "demo from linuxpkg"
+    dpkg -s linuxpkg-demo | grep -q "^Depends: hello (>= 1.0)"
+    apt-get $O remove -y linuxpkg-demo hello
+    test ! -e /usr/bin/linuxpkg-demo
+    echo "apt repository check passed on $(. /etc/os-release && echo "$PRETTY_NAME")"
+  '
+}
+
+repo_rpm() { # image
+  local image="$1"
+  step "$image: dnf install from the generated repository"
+  docker run --rm -v "$WORK/repo-rpm:/repo:ro" "$image" bash -ec '
+    cat > /etc/yum.repos.d/linuxpkg.repo <<REPO
+[linuxpkg]
+name=linuxpkg
+baseurl=file:///repo
+enabled=1
+gpgcheck=0
+REPO
+    dnf --disablerepo="*" --enablerepo=linuxpkg makecache
+    dnf --disablerepo="*" --enablerepo=linuxpkg repoquery --qf "%{name} %{version}-%{release}.%{arch}" "*" | sort
+    dnf --disablerepo="*" --enablerepo=linuxpkg install -y linuxpkg-demo
+    test "$(hello)" = "hello from linuxpkg"
+    test "$(linuxpkg-demo)" = "demo from linuxpkg"
+    rpm -q --requires linuxpkg-demo | grep -q "hello >= 1.0"
+    dnf remove -y linuxpkg-demo hello
+    test ! -e /usr/bin/linuxpkg-demo
+    echo "dnf repository check passed on $(. /etc/os-release && echo "$PRETTY_NAME")"
+  '
+}
+
 run_deb debian:12
 run_deb ubuntu:24.04
 run_rpm fedora:41
+repo_deb debian:12
+repo_deb ubuntu:24.04
+repo_rpm fedora:41
 
 real_deb debian:12 xz
 real_deb ubuntu:24.04 zstd
@@ -216,10 +293,12 @@ real_rpm fedora:41 hello
 OPENEULER="openeuler/openeuler:24.03-lts"
 if docker pull "$OPENEULER" >/dev/null 2>&1; then
   run_rpm "$OPENEULER"
+  repo_rpm "$OPENEULER"
   real_rpm "$OPENEULER" tree "https://repo.openeuler.org/openEuler-24.03-LTS/everything/x86_64/Packages/tree-2.1.1-1.oe2403.x86_64.rpm"
 else
   echo "NOTE: $OPENEULER could not be pulled, using rockylinux:9 as the RPM-family substitute"
   run_rpm rockylinux:9
+  repo_rpm rockylinux:9
   real_rpm rockylinux:9 tree
 fi
 

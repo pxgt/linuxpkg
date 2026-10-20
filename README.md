@@ -38,6 +38,7 @@ linuxpkg 是一个**纯 MoonBit** 实现的 Linux 软件包构建与检查工具
 | 依赖关系：`depends`、`recommends`、`suggests`、`conflicts`、`replaces`、`provides`（带版本约束） | ✅ |
 | 压缩：gzip（默认）、xz、zstd、不压缩，deb 和 rpm 都能选（`--compression` 或配置里的 `compression`） | ✅ |
 | 读取并完整校验 gzip / xz / zstd / lzma / 不压缩的 deb 与 rpm，包括 Debian、Ubuntu、Fedora、openEuler 的真实发行版包 | ✅ |
+| **软件源**：`linuxpkg repo <目录>` 生成 apt 平铺仓库（Packages / Packages.gz / Packages.xz / Release）和 dnf 仓库（repodata，与 createrepo_c 输出一致），别人直接 `apt install` / `dnf install` | ✅ |
 | 有界解压：xz、zstd、gzip 炸弹在解压前或解压中就被上限截住（默认 1 GiB） | ✅ |
 
 ## 安装与构建
@@ -77,6 +78,7 @@ linuxpkg build examples/hello/linuxpkg.json --compression zstd --out dist-zstd  
 linuxpkg inspect dist/hello_1.0.0-1_all.deb      # 看元数据和文件列表
 linuxpkg inspect dist/hello-1.0.0-1.noarch.rpm --json
 linuxpkg verify dist/hello-1.0.0-1.noarch.rpm    # 退出码 0 表示通过
+linuxpkg repo dist                               # 给 dist 里的包生成 apt / dnf 软件源索引
 ```
 
 退出码：`0` 成功；`1` 用法错误、文件读不了、不是包、或用了不支持的压缩；`2` `verify` 发现包损坏或被篡改。
@@ -151,7 +153,7 @@ linuxpkg verify dist/hello-1.0.0-1.noarch.rpm    # 退出码 0 表示通过
 
 不做：
 
-- 包签名（GPG / PGP）、软件仓库元数据（apt 的 Release/Packages、yum 的 repodata）
+- 包签名和仓库签名（GPG / PGP）：`repo` 命令不签名，[docs/repository.md](docs/repository.md) 给出用外部 `gpg` 签名的命令
 - bzip2 压缩（生态里没有可用的纯 MoonBit 实现；读到会明确报 `unsupported`）。`.lzma` 只能读，不能写。
 - Alpine apk、Arch pkg、源码包（`.dsc`、`.src.rpm`）
 - 自动分析二进制的动态库依赖
@@ -184,7 +186,7 @@ tools/oracle/run.sh                        # 需要 dpkg-deb、dpkg、sudo（可
 ```
 
 目录：`spec/`（包模型、配置、校验）、`archive/tar|ar|cpio/`（归档格式）、`compress/`（gzip / xz / zstd 压缩与有界解压）、
-`deb/`、`rpm/`（构建、读取、校验）、`cmd/main/`（命令行）、`examples/`（示例）、`tools/oracle/`（官方工具验证脚本）。
+`deb/`、`rpm/`（构建、读取、校验）、`repo/`（apt / dnf 软件源索引）、`cmd/main/`（命令行）、`examples/`（示例）、`tools/oracle/`（官方工具验证脚本）。
 
 ## 许可证
 

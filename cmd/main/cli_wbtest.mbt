@@ -232,3 +232,48 @@ test "build picks the compression from the config, the command line wins" {
   @fs.remove_file(dir + "/tool.sh")
   @fs.remove_dir(dir)
 }
+
+///|
+test "repo writes apt and dnf metadata that the checks accept" {
+  let dir = "cli_repo_tmp"
+  ensure_dir(dir)
+  write_bytes(dir + "/linuxpkg.json", @utf8.encode(CONFIG_JSON))
+  write_bytes(dir + "/tool.sh", b"#!/bin/sh\necho hi\n")
+  let repo = dir + "/repo"
+  assert_eq(run(["build", dir + "/linuxpkg.json", "--out", repo]), 0)
+  assert_eq(run(["repo", repo]), 0)
+  for name in ["Packages", "Packages.gz", "Packages.xz", "Release"] {
+    assert_true(@fs.path_exists(repo + "/" + name))
+  }
+  let before = @fs.read_dir(repo + "/repodata")
+  assert_eq(before.length(), 4)
+  let release = read_bytes(repo + "/Release")
+  // The date comes from the package, so a second run changes nothing.
+  assert_eq(run(["repo", repo]), 0)
+  assert_eq(read_bytes(repo + "/Release"), release)
+  assert_eq(@fs.read_dir(repo + "/repodata"), before)
+  // Only one format.
+  assert_eq(run(["repo", repo, "--format", "deb"]), 0)
+  assert_eq(run(["repo", repo, "-f", "rpm"]), 0)
+  // Usage and input errors.
+  assert_eq(run(["repo"]), 1)
+  assert_eq(run(["repo", repo, dir]), 1)
+  assert_eq(run(["repo", repo, "--format", "zip"]), 1)
+  assert_eq(run(["repo", dir + "/missing"]), 1)
+  assert_eq(run(["repo", dir]), 1)
+  // A file that is not a package stops the command.
+  write_bytes(repo + "/broken.deb", b"nope")
+  assert_eq(run(["repo", repo]), 1)
+  @fs.remove_file(repo + "/broken.deb")
+  for name in @fs.read_dir(repo + "/repodata") {
+    @fs.remove_file(repo + "/repodata/" + name)
+  }
+  @fs.remove_dir(repo + "/repodata")
+  for name in @fs.read_dir(repo) {
+    @fs.remove_file(repo + "/" + name)
+  }
+  @fs.remove_dir(repo)
+  @fs.remove_file(dir + "/linuxpkg.json")
+  @fs.remove_file(dir + "/tool.sh")
+  @fs.remove_dir(dir)
+}

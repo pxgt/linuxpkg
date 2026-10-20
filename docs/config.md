@@ -68,8 +68,11 @@ Parent directories: debs list every parent directory automatically; rpms own onl
 linuxpkg build <config.json> [--format deb|rpm|all] [--compression none|gzip|xz|zstd] [--out DIR]
 linuxpkg inspect <file.deb|file.rpm> [--json]
 linuxpkg verify  <file.deb|file.rpm>
+linuxpkg repo   <dir> [--format deb|rpm|all]
 linuxpkg init [PATH] [--force]
 ```
+
+`repo` writes apt and dnf repository metadata for the packages in a directory, see [repository.md](repository.md).
 
 Exit status: `0` success; `1` usage error, unreadable file, not a package, or unsupported compression (bzip2);
 `2` `verify` found a damaged or tampered package.
