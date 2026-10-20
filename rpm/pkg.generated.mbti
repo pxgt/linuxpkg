@@ -3,12 +3,13 @@ package "Xpeng/linuxpkg/rpm"
 
 import {
   "Xpeng/linuxpkg/archive/cpio",
+  "Xpeng/linuxpkg/compress",
   "Xpeng/linuxpkg/spec",
   "moonbitlang/core/debug",
 }
 
 // Values
-pub fn build(@spec.PackageSpec) -> Bytes raise RpmError
+pub fn build(@spec.PackageSpec, compression? : @compress.Compression) -> Bytes raise RpmError
 
 pub fn file_name(@spec.PackageSpec) -> String
 

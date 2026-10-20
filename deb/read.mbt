@@ -13,56 +13,48 @@ pub(all) struct DebPackage {
   md5sums : Array[(String, String)]
   /// Absolute paths listed in `conffiles`.
   conffiles : Array[String]
-  /// `gzip` or `none`.
+  /// `none`, `gzip`, `xz`, `zstd` or `lzma`.
   control_compression : String
   data_compression : String
 } derive(Eq, Debug)
 
 ///|
 /// How a part is compressed, judging by the extension after `.tar`.
-fn compression_of(part : String, base : String) -> String raise DebError {
-  match part[base.length():] {
-    "" => "none"
-    ".gz" => "gzip"
-    ".xz" =>
-      raise DebError::Unsupported(
-        message="\{part}: xz compression is not supported (only gzip and uncompressed members)",
-      )
-    ".zst" =>
-      raise DebError::Unsupported(
-        message="\{part}: zstd compression is not supported (only gzip and uncompressed members)",
-      )
-    ".bz2" =>
-      raise DebError::Unsupported(
-        message="\{part}: bzip2 compression is not supported (only gzip and uncompressed members)",
-      )
-    ".lzma" =>
-      raise DebError::Unsupported(
-        message="\{part}: lzma compression is not supported (only gzip and uncompressed members)",
-      )
-    other =>
-      raise DebError::Unsupported(
-        message="\{part}: unknown compression \"\{other}\" (only gzip and uncompressed members are supported)",
-      )
+fn compression_of(
+  part : String,
+  base : String,
+) -> @compress.Compression raise DebError {
+  let suffix = part[base.length():].to_owned()
+  match @compress.Compression::from_extension(suffix) {
+    Some(compression) => compression
+    None =>
+      if suffix == ".bz2" {
+        raise DebError::Unsupported(
+          message="\{part}: bzip2 compression is not supported (use gzip, xz, zstd, lzma or no compression)",
+        )
+      } else {
+        raise DebError::Unsupported(
+          message="\{part}: unknown compression \"\{suffix}\" (supported: gzip, xz, zstd, lzma, none)",
+        )
+      }
   }
 }
 
 ///|
 fn unpack(
   part : @ar.Member,
-  compression : String,
+  compression : @compress.Compression,
   max_unpacked : Int32,
 ) -> Bytes raise DebError {
-  if compression == "none" {
-    return part.data
-  }
-  @gunzip.decompress(part.data, max_size=max_unpacked) catch {
+  @compress.decompress(part.data, compression, max_size=max_unpacked) catch {
     Corrupt(message) =>
       raise DebError::Corrupt(message="\{part.name}: \{message}")
     TooLarge(_) =>
       raise DebError::Corrupt(
         message="\{part.name} unpacks to more than \{max_unpacked} bytes",
       )
+    Unsupported(message) =>
+      raise DebError::Unsupported(message="\{part.name}: \{message}")
   }
 }
 
@@ -98,9 +90,9 @@ pub fn normalize_path(path : String) -> String {
 
 ///|
 /// Open a `.deb`: split the ar container, unpack the control and data
-/// archives (gzip or uncompressed) and parse the control information. Other
-/// compressions are reported as `Unsupported`. `max_unpacked` bounds the size
-/// of each unpacked archive.
+/// archives (gzip, xz, zstd, lzma or uncompressed) and parse the control
+/// information. Other compressions (bzip2) are reported as `Unsupported`.
+/// `max_unpacked` bounds the size of each unpacked archive.
 pub fn read(
   deb : BytesView,
   max_unpacked~ : Int32 = 1073741824,
@@ -192,8 +184,8 @@ pub fn read(
     files,
     md5sums,
     conffiles,
-    control_compression,
-    data_compression,
+    control_compression: control_compression.name(),
+    data_compression: data_compression.name(),
   }
 }
 

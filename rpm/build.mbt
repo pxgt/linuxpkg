@@ -278,7 +278,11 @@ fn script_tags(spec : @spec.PackageSpec, tags : Array[Tag]) -> Unit {
 }
 
 ///|
-fn relation_tags(spec : @spec.PackageSpec, tags : Array[Tag]) -> Unit {
+fn relation_tags(
+  spec : @spec.PackageSpec,
+  tags : Array[Tag],
+  compression : @compress.Compression,
+) -> Unit {
   let provides = Relations::from(spec.provides)
   provides.add(spec.name, SENSE_EQUAL, evr(spec))
   provides.push_tags(
@@ -294,6 +298,12 @@ fn relation_tags(spec : @spec.PackageSpec, tags : Array[Tag]) -> Unit {
   requires.add("rpmlib(CompressedFileNames)", rpmlib, "3.0.4-1")
   requires.add("rpmlib(FileDigests)", rpmlib, "4.6.0-1")
   requires.add("rpmlib(PayloadFilesHavePrefix)", rpmlib, "4.0-1")
+  // xz and zstd payloads need an rpm that can unpack them.
+  match compression {
+    Xz => requires.add("rpmlib(PayloadIsXz)", rpmlib, "5.2-1")
+    Zstd => requires.add("rpmlib(PayloadIsZstd)", rpmlib, "5.4.18-1")
+    _ => ()
+  }
   requires.push_tags(
     tags,
     TAG_REQUIRENAME,
@@ -359,6 +369,7 @@ fn main_header(
   spec : @spec.PackageSpec,
   files : Array[FileItem],
   payload_digest : String,
+  compression : @compress.Compression,
 ) -> Header raise RpmError {
   let tags : Array[Tag] = []
   tags.push({ id: TAG_I18N_TABLE, value: StrArray(["C"]), })
@@ -418,10 +429,20 @@ fn main_header(
   tags.push({ id: TAG_SOURCERPM, value: Str("(none)"), })
   file_tags(spec, files, tags)
   script_tags(spec, tags)
-  relation_tags(spec, tags)
+  relation_tags(spec, tags, compression)
   tags.push({ id: TAG_PAYLOADFORMAT, value: Str("cpio"), })
-  tags.push({ id: TAG_PAYLOADCOMPRESSOR, value: Str("gzip"), })
-  tags.push({ id: TAG_PAYLOADFLAGS, value: Str("9"), })
+  // rpmbuild leaves PAYLOADCOMPRESSOR out for uncompressed payloads, and
+  // rpm then reads the payload as it is.
+  let (compressor, level) = match compression {
+    Gzip | Lzma => (Some("gzip"), "9")
+    Xz => (Some("xz"), "6")
+    Zstd => (Some("zstd"), "9")
+    None => (Option::None, "0")
+  }
+  if compressor is Some(name) {
+    tags.push({ id: TAG_PAYLOADCOMPRESSOR, value: Str(name), })
+  }
+  tags.push({ id: TAG_PAYLOADFLAGS, value: Str(level), })
   tags.push({ id: TAG_PAYLOADDIGEST, value: StrArray([payload_digest]), })
   tags.push({ id: TAG_PAYLOADDIGESTALGO, value: Int32([DIGEST_SHA256]), })
   { region: Some(REGION_IMMUTABLE), tags, }
@@ -448,9 +469,20 @@ fn lead(spec : @spec.PackageSpec) -> Bytes {
 ///
 /// The file is the 96-byte lead, the signature header (size, SHA-256 of the
 /// main header and uncompressed payload size; there is no GPG signature), the
-/// main header and the gzip compressed cpio payload. The result depends only
-/// on `spec`.
-pub fn build(spec : @spec.PackageSpec) -> Bytes raise RpmError {
+/// main header and the cpio payload, compressed with `compression` (gzip by
+/// default). For xz and zstd the header requires `rpmlib(PayloadIsXz)` or
+/// `rpmlib(PayloadIsZstd)`, so an rpm that cannot unpack them refuses the
+/// package. The result depends only on `spec` and `compression`.
+pub fn build(
+  spec : @spec.PackageSpec,
+  compression~ : @compress.Compression = Gzip,
+) -> Bytes raise RpmError {
+  if compression == Lzma {
+    raise RpmError::Invalid(
+      field="compression",
+      message="lzma cannot be written, use gzip, xz, zstd or none",
+    )
+  }
   spec.validate() catch {
     @spec.SpecError::Invalid(field~, message~) =>
       raise RpmError::Invalid(field~, message~)
@@ -466,8 +498,10 @@ pub fn build(spec : @spec.PackageSpec) -> Bytes raise RpmError {
   let cpio = @cpio.build(entries) catch {
     err => raise RpmError::Invalid(field="payload", message="\{err}")
   }
-  let payload = @gzip.compress(cpio)
-  let header = main_header(spec, files, sha256_hex(payload)).encode()
+  let payload = @compress.compress(cpio, compression) catch {
+    err => raise RpmError::Invalid(field="payload", message="\{err}")
+  }
+  let header = main_header(spec, files, sha256_hex(payload), compression).encode()
   let signature : Header = {
     region: Some(REGION_SIGNATURE),
     tags: [

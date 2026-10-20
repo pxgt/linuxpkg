@@ -14,7 +14,7 @@ const USAGE : String =
   #|linuxpkg - build Debian and RPM packages without dpkg-deb or rpmbuild
   #|
   #|Usage:
-  #|  linuxpkg build <config.json> [--format deb|rpm|all] [--out DIR]
+  #|  linuxpkg build <config.json> [--format deb|rpm|all] [--compression C] [--out DIR]
   #|  linuxpkg inspect <file.deb|file.rpm> [--json]
   #|  linuxpkg verify <file.deb|file.rpm>
   #|  linuxpkg init [PATH] [--force]
@@ -28,6 +28,8 @@ const USAGE : String =
   #|
   #|Options:
   #|  -f, --format FORMAT  Package format to build: deb, rpm or all (default).
+  #|  -z, --compression C  Payload compression: none, gzip, xz or zstd. Overrides
+  #|                       the configuration (default: gzip).
   #|  -o, --out DIR        Directory for the packages (default: current directory).
   #|      --json           Print machine readable JSON (inspect).
   #|      --force          Overwrite an existing file (init).

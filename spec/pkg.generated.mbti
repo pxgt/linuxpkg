@@ -2,6 +2,7 @@
 package "Xpeng/linuxpkg/spec"
 
 import {
+  "Xpeng/linuxpkg/compress",
   "moonbitlang/core/debug",
 }
 
@@ -66,9 +67,14 @@ pub(all) struct Config {
   contents : Array[Content]
   scripts : ScriptPaths
   mtime : Int64?
+  compression : @compress.Compression?
+  deb : FormatOptions
+  rpm : FormatOptions
 } derive(Eq, @debug.Debug)
+pub fn Config::deb_compression(Self) -> @compress.Compression
 pub fn Config::parse(String) -> Self raise SpecError
 pub fn Config::resolve(Self, Map[String, Bytes], default_mtime? : Int64) -> PackageSpec raise SpecError
+pub fn Config::rpm_compression(Self) -> @compress.Compression
 pub fn Config::sources(Self) -> Array[String]
 
 pub(all) struct Content {
@@ -115,6 +121,10 @@ pub(all) enum EntryKind {
   File(Bytes)
   Dir
   Symlink(String)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct FormatOptions {
+  compression : @compress.Compression?
 } derive(Eq, @debug.Debug)
 
 pub(all) struct PackageSpec {

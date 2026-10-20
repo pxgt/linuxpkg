@@ -105,7 +105,7 @@ test "signature header carries size and digests" {
     parts.signature.string(273),
     Some(@crypto.bytes_to_hex_string(@crypto.sha256(parts.header_bytes))),
   )
-  let cpio = @gzip.decompress(parts.payload)
+  let cpio = @compress.decompress(parts.payload, Gzip)
   assert_eq(parts.signature.ints(1007), [cpio.length()])
   // The main header starts at an 8 byte boundary after the signature.
   assert_eq(
@@ -210,7 +210,7 @@ test "the payload is a gzip compressed cpio of the files in header order" {
   assert_eq(parts.header.strings(5092), [
     @crypto.bytes_to_hex_string(@crypto.sha256(parts.payload)),
   ])
-  let entries = @cpio.parse(@gzip.decompress(parts.payload))
+  let entries = @cpio.parse(@compress.decompress(parts.payload, Gzip))
   assert_eq(entries.map(e => e.path), [
     "./etc/hello.conf", "./usr/bin/empty", "./usr/bin/hello", "./usr/bin/hi", "./var/lib/hello",
   ])
@@ -239,7 +239,7 @@ test "a package without files has no file tags and an empty payload" {
   assert_eq(parts.header.ints(1009), [0])
   assert_eq(parts.header.string(1014), Some("Unspecified"))
   assert_eq(parts.header.get(1003), None)
-  assert_eq(@cpio.parse(@gzip.decompress(parts.payload)).length(), 0)
+  assert_eq(@cpio.parse(@compress.decompress(parts.payload, Gzip)).length(), 0)
 }
 
 ///|
@@ -273,4 +273,59 @@ test "invalid specs are rejected" {
     }),
     content="/a: modification time 4294967296 does not fit in 32 bits",
   )
+}
+
+///|
+fn requires_of(parts : Parts) -> Array[String] {
+  let h = parts.header
+  let names = h.strings(1049)
+  let flags = h.ints(1048)
+  let versions = h.strings(1050)
+  names.mapi((i, name) => "\{name} \{flags[i]} \{versions[i]}")
+}
+
+///|
+test "every compression yields an rpm that reads back and verifies" {
+  let spec = sample_spec()
+  let kinds : Array[(@compress.Compression, String, String)] = [
+    (Gzip, "gzip", "9"),
+    (Xz, "xz", "6"),
+    (Zstd, "zstd", "9"),
+    (None, "identity", "0"),
+  ]
+  for kind in kinds {
+    let rpm = @rpm.build(spec, compression=kind.0)
+    let pkg = @rpm.read(rpm)
+    assert_eq(pkg.compressor(), kind.1)
+    assert_eq(pkg.header.string(1126), Some(kind.2))
+    assert_eq(pkg.verify(), [])
+    assert_eq(pkg.payload_entries().length() > 0, true)
+    assert_eq(rpm, @rpm.build(spec, compression=kind.0))
+  }
+  assert_eq(@rpm.build(spec), @rpm.build(spec, compression=Gzip))
+}
+
+///|
+test "xz and zstd payloads require the matching rpmlib feature" {
+  let spec = sample_spec()
+  let features = (c : @compress.Compression) => {
+    requires_of(open_rpm(@rpm.build(spec, compression=c)))
+    .filter(r => r.contains("PayloadIs"))
+    .join(",")
+  }
+  // RPMSENSE_LESS | RPMSENSE_EQUAL | RPMSENSE_RPMLIB = 2 + 8 + (1 << 24).
+  inspect(features(Gzip), content="")
+  inspect(features(None), content="")
+  inspect(features(Xz), content="rpmlib(PayloadIsXz) 16777226 5.2-1")
+  inspect(features(Zstd), content="rpmlib(PayloadIsZstd) 16777226 5.4.18-1")
+}
+
+///|
+test "lzma cannot be chosen for writing an rpm" {
+  try @rpm.build(sample_spec(), compression=Lzma) catch {
+    @rpm.RpmError::Invalid(field~, ..) => assert_eq(field, "compression")
+    err => fail("unexpected \{err}")
+  } noraise {
+    _ => fail("expected an error")
+  }
 }

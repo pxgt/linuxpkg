@@ -1,8 +1,7 @@
 import {
   "Xpeng/linuxpkg/spec",
   "Xpeng/linuxpkg/archive/cpio",
-  "Xpeng/linuxpkg/internal/gunzip",
-  "moonbit-community/flate/gzip",
+  "Xpeng/linuxpkg/compress",
   "moonbitlang/x/crypto",
   "moonbitlang/core/encoding/utf8",
 }

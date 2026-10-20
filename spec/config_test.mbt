@@ -152,7 +152,7 @@ test "malformed input is rejected with the field name" {
   )
   inspect(
     config_error(with_extra("\"colour\": \"red\"")),
-    content="colour: unknown field, expected one of: name, version, release, epoch, arch, maintainer, description, homepage, license, vendor, section, priority, depends, recommends, suggests, conflicts, replaces, provides, mtime, contents, scripts",
+    content="colour: unknown field, expected one of: name, version, release, epoch, arch, maintainer, description, homepage, license, vendor, section, priority, depends, recommends, suggests, conflicts, replaces, provides, mtime, contents, scripts, compression, deb, rpm",
   )
 }
 
@@ -331,4 +331,61 @@ test "resolve reports missing files and invalid packages" {
   )
   let bad_name = "{\"name\": \"Bad\", \"version\": \"1\", \"arch\": \"all\", \"maintainer\": \"m\", \"description\": \"d\"}"
   inspect(resolve_error(bad_name, Map([])), content="name: must be lowercase")
+}
+
+///|
+test "compression: defaults, package-wide and per format" {
+  let none = @spec.Config::parse(minimal_config)
+  assert_eq(none.compression, None)
+  assert_eq(none.deb_compression(), Gzip)
+  assert_eq(none.rpm_compression(), Gzip)
+  let wide = @spec.Config::parse(with_extra("\"compression\": \"zstd\""))
+  assert_eq(wide.deb_compression(), Zstd)
+  assert_eq(wide.rpm_compression(), Zstd)
+  let mixed = @spec.Config::parse(
+    with_extra(
+      "\"compression\": \"xz\", \"deb\": {\"compression\": \"zstd\"}, \"rpm\": {\"compression\": \"none\"}",
+    ),
+  )
+  assert_eq(mixed.compression, Some(Xz))
+  assert_eq(mixed.deb_compression(), Zstd)
+  assert_eq(mixed.rpm_compression(), None)
+  // A format block without a compression falls back to the package-wide one.
+  let partial = @spec.Config::parse(
+    with_extra("\"compression\": \"xz\", \"deb\": {}"),
+  )
+  assert_eq(partial.deb_compression(), Xz)
+  let only_rpm = @spec.Config::parse(
+    with_extra("\"rpm\": {\"compression\": \"gz\"}"),
+  )
+  assert_eq(only_rpm.deb_compression(), Gzip)
+  assert_eq(only_rpm.rpm_compression(), Gzip)
+}
+
+///|
+test "compression: invalid values name their field" {
+  inspect(
+    config_error(with_extra("\"compression\": \"bzip2\"")),
+    content="compression: unknown compression \"bzip2\", expected none, gzip, xz or zstd",
+  )
+  inspect(
+    config_error(with_extra("\"compression\": \"lzma\"")),
+    content="compression: unknown compression \"lzma\", expected none, gzip, xz or zstd",
+  )
+  inspect(
+    config_error(with_extra("\"compression\": 5")),
+    content="compression: must be a string",
+  )
+  inspect(
+    config_error(with_extra("\"deb\": {\"compression\": \"7z\"}")),
+    content="deb.compression: unknown compression \"7z\", expected none, gzip, xz or zstd",
+  )
+  inspect(
+    config_error(with_extra("\"rpm\": {\"level\": 3}")),
+    content="rpm.level: unknown field, expected one of: compression",
+  )
+  inspect(
+    config_error(with_extra("\"rpm\": 3")),
+    content="rpm: must be an object",
+  )
 }
