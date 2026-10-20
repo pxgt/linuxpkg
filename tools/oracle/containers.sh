@@ -283,6 +283,8 @@ REPO
 arch_check() {
   step "archlinux:latest: pacman -U, -Qkk, -R for ${COMPRESSIONS}"
   docker run --rm -v "$WORK/pkgs:/pkgs:ro" archlinux:latest bash -ec '
+    # The image does not extract documentation, which would show up as missing files.
+    sed -i "/^NoExtract/d" /etc/pacman.conf
     for c in '"$COMPRESSIONS"'; do
       echo "-- $c"
       f=$(ls /pkgs/$c/hello-1.0.0-1-any.pkg.tar*)
