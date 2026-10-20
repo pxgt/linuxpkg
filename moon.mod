@@ -1,6 +1,6 @@
 name = "Xpeng/linuxpkg"
 
-version = "0.2.0"
+version = "0.3.0"
 
 readme = "README.md"
 
@@ -8,11 +8,11 @@ repository = "https://github.com/pxgt/linuxpkg"
 
 license = "Apache-2.0"
 
-keywords = [ "deb", "rpm", "packaging", "linux", "archive" ]
+keywords = [ "deb", "rpm", "packaging", "linux", "archive", "apk", "pacman" ]
 
 preferred_target = "wasm-gc"
 
-description = "Pure-MoonBit toolkit to build, inspect and verify Linux deb and rpm packages, without dpkg-deb or rpmbuild"
+description = "Pure-MoonBit toolkit to build, inspect and verify Linux packages (deb, rpm, Arch, Alpine) and apt/dnf repositories, without dpkg-deb or rpmbuild"
 
 import {
   "moonbit-community/flate@0.9.0",

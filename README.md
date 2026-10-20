@@ -3,13 +3,14 @@
 **English summary.** linuxpkg is a pure-MoonBit toolkit (library + command line) that builds,
 inspects and verifies Linux packages. From one JSON file it produces Debian/Ubuntu/UOS/Kylin
 `.deb` packages without `dpkg-deb` and `.rpm` packages (Fedora, openEuler, Anolis) without `rpmbuild`,
-and it can read and check existing `.deb` and `.rpm` files, whether they use gzip, xz or zstd. Nothing is
-shelled out: because tar, ar, cpio and the compression (gzip, xz, zstd) are MoonBit code, it runs on the wasm, wasm-gc, js and native backends, so you can build
+and it also writes Arch Linux (`.pkg.tar.zst`) and Alpine (`.apk`) packages and apt / dnf repository metadata. It reads
+and checks existing packages of all four kinds, whether they use gzip, xz or zstd. Nothing is shelled out: because tar, ar, cpio and the compression (gzip, xz, zstd) are MoonBit code, it runs on the wasm, wasm-gc, js and native backends, so you can build
 Linux packages on Windows or macOS. Output depends only on the input, so builds are reproducible.
 Every package we write is checked against the official tools (`dpkg-deb`, `dpkg -i`, `lintian`, `rpm -K`,
-`rpm -V`, `rpm2cpio`) and installed in Debian, Ubuntu, Fedora and openEuler containers in CI.
+`rpm -V`, `rpm2cpio`, `pacman -Qkk`, `apk audit`) and installed in Debian, Ubuntu, Fedora, openEuler, Arch Linux and Alpine
+containers in CI.
 
-> 状态：0.2.0 已发布到 mooncakes（`Xpeng/linuxpkg`）。deb 和 rpm 的构建、检查、校验都已可用；main 分支已支持 gzip / xz / zstd / 不压缩（下一个版本发布）。
+> 状态：0.3.0 已发布到 mooncakes（`Xpeng/linuxpkg`）。deb、rpm、Arch Linux、Alpine 四种包的构建、检查、校验，以及 apt / dnf 软件源索引都已可用；压缩支持 gzip / xz / zstd / 不压缩。
 
 ## 它是什么
 
@@ -58,8 +59,8 @@ moon add Xpeng/linuxpkg
 不安装，直接运行已发布的命令行程序（`moonx` 会下载预编译的 wasm 版本，文件路径请用绝对路径）：
 
 ```sh
-moonx Xpeng/linuxpkg/cmd/main@0.2.0 inspect /绝对路径/hello_1.0.0-1_all.deb
-moonx Xpeng/linuxpkg/cmd/main@0.2.0 verify /绝对路径/hello-1.0.0-1.noarch.rpm
+moonx Xpeng/linuxpkg/cmd/main@0.3.0 inspect /绝对路径/hello_1.0.0-1_all.deb
+moonx Xpeng/linuxpkg/cmd/main@0.3.0 verify /绝对路径/hello-1.0.0-1.noarch.rpm
 ```
 
 命令行程序也可以从源码构建：
