@@ -17,4 +17,6 @@ description = "Pure-MoonBit toolkit to build, inspect and verify Linux deb and r
 import {
   "moonbit-community/flate@0.9.0",
   "moonbitlang/x@0.5.5",
+  "Milky2018/zstd@0.1.4",
+  "aurora0x27/lzma-mbt@0.1.0",
 }

@@ -1,4 +1,5 @@
 import {
+  "Xpeng/linuxpkg/compress",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
 }

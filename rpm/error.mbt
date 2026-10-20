@@ -5,7 +5,7 @@
 /// - `Corrupt`: a file that should be an rpm is malformed; `offset` is the
 ///   byte position of the problem (or -1 when it has no single position).
 /// - `Unsupported`: the rpm is valid but uses something this package does not
-///   implement, such as zstd or xz compression.
+///   implement, such as an unknown payload format or compressor.
 pub(all) suberror RpmError {
   Invalid(field~ : String, message~ : String)
   Corrupt(offset~ : Int32, message~ : String)

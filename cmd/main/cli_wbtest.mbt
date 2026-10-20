@@ -2,7 +2,14 @@
 fn options_of(args : Array[String]) -> Options raise CliError {
   parse_options(
     args,
-    { "--format": "format", "-f": "format", "--out": "out", "-o": "out" },
+    {
+      "--format": "format",
+      "-f": "format",
+      "--out": "out",
+      "-o": "out",
+      "--compression": "compression",
+      "-z": "compression",
+    },
     { "--force": "force" },
   )
 }
@@ -173,4 +180,55 @@ test "inspect and verify need exactly one existing file" {
   assert_eq(run(["inspect", "does-not-exist.deb"]), 1)
   assert_eq(run(["verify"]), 1)
   assert_eq(run(["verify", "does-not-exist.deb"]), 1)
+}
+
+///|
+const CONFIG_JSON : String =
+  #|{
+  #|  "name": "tinytool", "version": "1.0", "arch": "all",
+  #|  "maintainer": "T <t@example.org>", "description": "Tiny\nTool",
+  #|  "mtime": 1700000000,
+  #|  "compression": "xz",
+  #|  "rpm": {"compression": "zstd"},
+  #|  "contents": [{"src": "tool.sh", "dst": "/usr/bin/tool", "mode": "0755"}]
+  #|}
+
+///|
+test "build picks the compression from the config, the command line wins" {
+  let dir = "cli_compress_tmp"
+  ensure_dir(dir)
+  write_bytes(dir + "/linuxpkg.json", @utf8.encode(CONFIG_JSON))
+  write_bytes(dir + "/tool.sh", b"#!/bin/sh\necho hi\n")
+  let config = dir + "/linuxpkg.json"
+  let find = (out : String, suffix : String) => {
+    @fs.read_dir(out).iter().any(name => name.has_suffix(suffix))
+  }
+  // From the configuration: deb uses the package-wide xz, rpm its own zstd.
+  assert_eq(run(["build", config, "--out", dir + "/a"]), 0)
+  assert_eq(run(["verify", dir + "/a/tinytool_1.0-1_all.deb"]), 0)
+  assert_eq(run(["verify", dir + "/a/tinytool-1.0-1.noarch.rpm"]), 0)
+  let deb = @deb.read(read_bytes(dir + "/a/tinytool_1.0-1_all.deb"))
+  assert_eq(deb.data_compression, "xz")
+  let rpm = @rpm.read(read_bytes(dir + "/a/tinytool-1.0-1.noarch.rpm"))
+  assert_eq(rpm.compressor(), "zstd")
+  // The command line overrides both.
+  assert_eq(run(["build", config, "-z", "none", "--out", dir + "/b"]), 0)
+  let deb = @deb.read(read_bytes(dir + "/b/tinytool_1.0-1_all.deb"))
+  assert_eq(deb.data_compression, "none")
+  let rpm = @rpm.read(read_bytes(dir + "/b/tinytool-1.0-1.noarch.rpm"))
+  assert_eq(rpm.compressor(), "identity")
+  assert_eq(run(["verify", dir + "/b/tinytool-1.0-1.noarch.rpm"]), 0)
+  // Unknown names are usage errors.
+  assert_eq(run(["build", config, "--compression", "bzip2"]), 1)
+  assert_eq(run(["build", config, "--compression"]), 1)
+  assert_true(find(dir + "/a", ".deb") && find(dir + "/b", ".rpm"))
+  for sub in ["a", "b"] {
+    for name in @fs.read_dir(dir + "/" + sub) {
+      @fs.remove_file(dir + "/" + sub + "/" + name)
+    }
+    @fs.remove_dir(dir + "/" + sub)
+  }
+  @fs.remove_file(config)
+  @fs.remove_file(dir + "/tool.sh")
+  @fs.remove_dir(dir)
 }

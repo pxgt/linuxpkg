@@ -41,8 +41,8 @@ fn strip_dot_slash(path : String) -> String {
 /// link targets and the digest of every regular file.
 ///
 /// Raises `Unsupported` when the package is otherwise sound but its payload
-/// uses a compression this package cannot unpack (xz, zstd, ...), because
-/// the file contents then remain unchecked.
+/// uses a compressor this package cannot unpack, because the file contents
+/// then remain unchecked.
 pub fn RpmPackage::verify(self : RpmPackage) -> Array[String] raise RpmError {
   let problems : Array[String] = []
   let sig = self.signature

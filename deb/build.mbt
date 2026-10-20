@@ -189,34 +189,54 @@ fn control_entries(
 }
 
 ///|
-fn tar_gz(entries : Array[@tar.Entry], what : String) -> Bytes raise DebError {
+fn tar_compressed(
+  entries : Array[@tar.Entry],
+  what : String,
+  compression : @compress.Compression,
+) -> Bytes raise DebError {
   let tar = @tar.build(entries, long_names=Gnu) catch {
     err => raise DebError::Invalid(field=what, message="\{err}")
   }
-  @gzip.compress(tar)
+  @compress.compress(tar, compression) catch {
+    err => raise DebError::Invalid(field=what, message="\{err}")
+  }
 }
 
 ///|
 /// Build a `.deb` file from a package description.
 ///
-/// The result is an ar archive holding `debian-binary`, `control.tar.gz` and
-/// `data.tar.gz`, in that order. It depends only on `spec`: the same spec
-/// always yields the same bytes. Files are owned by the user and group named
+/// The result is an ar archive holding `debian-binary`, `control.tar` and
+/// `data.tar`, in that order, with the suffix of the chosen `compression`
+/// (`.gz` by default, `.xz`, `.zst` or none). It depends only on `spec` and
+/// `compression`: the same input always yields the same bytes. Files are owned by the user and group named
 /// in the entry; ids are always 0 and package managers resolve the names.
-pub fn build(spec : @spec.PackageSpec) -> Bytes raise DebError {
+pub fn build(
+  spec : @spec.PackageSpec,
+  compression~ : @compress.Compression = Gzip,
+) -> Bytes raise DebError {
+  if compression == Lzma {
+    raise DebError::Invalid(
+      field="compression",
+      message="lzma cannot be written, use gzip, xz, zstd or none",
+    )
+  }
   spec.validate() catch {
     @spec.SpecError::Invalid(field~, message~) =>
       raise DebError::Invalid(field~, message~)
   }
   let (data, sums) = data_entries(spec)
   let md5sums = sums.map(s => s.1).join("")
-  let control = tar_gz(control_entries(spec, md5sums), "control.tar")
-  let data_tar = tar_gz(data, "data.tar")
+  let control = tar_compressed(
+    control_entries(spec, md5sums),
+    "control.tar",
+    compression,
+  )
+  let data_tar = tar_compressed(data, "data.tar", compression)
   let mtime = spec.mtime
   @ar.build([
     @ar.Member::new("debian-binary", b"2.0\n", mtime~),
-    @ar.Member::new("control.tar.gz", control, mtime~),
-    @ar.Member::new("data.tar.gz", data_tar, mtime~),
+    @ar.Member::new("control.tar" + compression.extension(), control, mtime~),
+    @ar.Member::new("data.tar" + compression.extension(), data_tar, mtime~),
   ]) catch {
     err => raise DebError::Invalid(field="deb", message="\{err}")
   }

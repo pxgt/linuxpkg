@@ -1,0 +1,9 @@
+import {
+  "moonbit-community/flate/gzip",
+  "Milky2018/zstd",
+  "aurora0x27/lzma-mbt" @lzma,
+}
+
+import {
+  "moonbitlang/core/encoding/utf8",
+} for "test"

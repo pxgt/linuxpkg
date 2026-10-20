@@ -35,6 +35,14 @@ pub(all) struct ScriptPaths {
 } derive(Eq, Debug)
 
 ///|
+/// Options that apply to one output format (`"deb"` or `"rpm"` in the
+/// configuration).
+pub(all) struct FormatOptions {
+  /// Overrides the package-wide `compression` for this format.
+  compression : @compress.Compression?
+} derive(Eq, Debug)
+
+///|
 /// A parsed `linuxpkg.json`. It still refers to files by name; call
 /// `Config::sources` to learn which ones to read and `Config::resolve` to turn
 /// it into a `PackageSpec` once they are available.
@@ -60,14 +68,42 @@ pub(all) struct Config {
   contents : Array[Content]
   scripts : ScriptPaths
   mtime : Int64?
+  /// Compression of the payload of every format (`gzip` when unset).
+  compression : @compress.Compression?
+  deb : FormatOptions
+  rpm : FormatOptions
 } derive(Eq, Debug)
+
+///|
+/// The compression to use for the deb: the `deb` setting, else the
+/// package-wide one, else gzip.
+pub fn Config::deb_compression(self : Config) -> @compress.Compression {
+  match (self.deb.compression, self.compression) {
+    (Some(c), _) | (None, Some(c)) => c
+    (None, None) => Gzip
+  }
+}
+
+///|
+/// The compression to use for the rpm: the `rpm` setting, else the
+/// package-wide one, else gzip.
+pub fn Config::rpm_compression(self : Config) -> @compress.Compression {
+  match (self.rpm.compression, self.compression) {
+    (Some(c), _) | (None, Some(c)) => c
+    (None, None) => Gzip
+  }
+}
 
 ///|
 let top_level_keys : Array[String] = [
   "$schema", "name", "version", "release", "epoch", "arch", "maintainer", "description",
   "homepage", "license", "vendor", "section", "priority", "depends", "recommends",
   "suggests", "conflicts", "replaces", "provides", "mtime", "contents", "scripts",
+  "compression", "deb", "rpm",
 ]
+
+///|
+let format_keys : Array[String] = ["compression"]
 
 ///|
 let content_keys : Array[String] = [
@@ -291,6 +327,41 @@ fn parse_content(json : Json, index : Int32) -> Content raise SpecError {
 }
 
 ///|
+/// A compression name the user may ask for: `none`, `gzip`, `xz` or `zstd`.
+fn opt_compression(
+  map : Map[String, Json],
+  field : String,
+) -> @compress.Compression? raise SpecError {
+  match opt_string(map, "compression", field) {
+    None => None
+    Some(text) =>
+      match @compress.Compression::parse(text) {
+        Some(c) => Some(c)
+        None =>
+          raise invalid(
+            field,
+            "unknown compression \"\{text}\", expected none, gzip, xz or zstd",
+          )
+      }
+  }
+}
+
+///|
+fn parse_format_options(
+  json : Json?,
+  field : String,
+) -> FormatOptions raise SpecError {
+  match json {
+    None | Some(Null) => { compression: None, }
+    Some(value) => {
+      let map = object_of(value, field)
+      check_keys(map, format_keys, field)
+      { compression: opt_compression(map, "\{field}.compression"), }
+    }
+  }
+}
+
+///|
 fn parse_scripts(json : Json?) -> ScriptPaths raise SpecError {
   match json {
     None | Some(Null) =>
@@ -395,5 +466,8 @@ pub fn Config::parse(text : String) -> Config raise SpecError {
     contents,
     scripts: parse_scripts(map.get("scripts")),
     mtime: opt_whole(map, "mtime", "mtime"),
+    compression: opt_compression(map, "compression"),
+    deb: parse_format_options(map.get("deb"), "deb"),
+    rpm: parse_format_options(map.get("rpm"), "rpm"),
   }
 }

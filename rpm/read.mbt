@@ -33,8 +33,7 @@ pub(all) struct RpmFile {
 
 ///|
 /// Open an rpm: parse the lead, the signature header and the main header.
-/// Nothing is decompressed, so packages with xz or zstd payloads can be
-/// inspected too.
+/// Nothing is decompressed here; the payload is unpacked on demand.
 pub fn read(bytes : BytesView) -> RpmPackage raise RpmError {
   if bytes.length() < 96 {
     raise RpmError::Corrupt(
@@ -98,12 +97,18 @@ fn Header::numbers(self : Header, id : Int32) -> Array[Int64] {
 }
 
 ///|
-/// The name of the payload compressor (`gzip`, `xz`, `zstd`, ...); `gzip` is
-/// the rpm default when the tag is absent.
+/// The name of the payload compressor (`gzip`, `xz`, `zstd`, `lzma`, ...).
+/// When the tag is absent (rpmbuild omits it for uncompressed payloads, and
+/// rpm then assumes gzip) the payload itself decides: `identity` means it
+/// is stored as it is.
 pub fn RpmPackage::compressor(self : RpmPackage) -> String {
   match self.header.string(1125) {
     Some(name) => name
-    None => "gzip"
+    None =>
+      match @compress.detect(self.payload) {
+        None => if self.payload.length() == 0 { "gzip" } else { "identity" }
+        found => found.name()
+      }
   }
 }
 
@@ -182,8 +187,8 @@ pub fn RpmPackage::files(self : RpmPackage) -> Array[RpmFile] raise RpmError {
 }
 
 ///|
-/// Decompress the payload. Raises `Unsupported` for payload formats or
-/// compressors other than cpio with gzip or no compression.
+/// Decompress the payload. Raises `Unsupported` for payload formats other
+/// than cpio and for compressors other than gzip, xz, zstd, lzma or none.
 fn RpmPackage::raw_payload(
   self : RpmPackage,
   max_unpacked : Int32,
@@ -195,22 +200,31 @@ fn RpmPackage::raw_payload(
         message="payload format \"\{other}\" (only cpio is supported)",
       )
   }
-  let raw = match self.compressor() {
-    "gzip" =>
-      @gunzip.decompress(self.payload, max_size=max_unpacked) catch {
-        Corrupt(message) =>
-          raise RpmError::Corrupt(offset=-1, message="payload: \{message}")
-        TooLarge(_) =>
-          raise RpmError::Corrupt(
-            offset=-1,
-            message="payload unpacks to more than \{max_unpacked} bytes",
-          )
-      }
-    "identity" | "" => self.payload
+  let compression = match self.compressor() {
+    "gzip" => @compress.Compression::Gzip
+    "xz" => Xz
+    "zstd" => Zstd
+    "lzma" => Lzma
+    "identity" | "" => None
     other =>
       raise RpmError::Unsupported(
-        message="\{other} compression of the payload is not supported (only gzip and uncompressed payloads)",
+        message="\{other} compression of the payload is not supported (use gzip, xz, zstd, lzma or none)",
       )
+  }
+  let raw = @compress.decompress(
+    self.payload,
+    compression,
+    max_size=max_unpacked,
+  ) catch {
+    Corrupt(message) =>
+      raise RpmError::Corrupt(offset=-1, message="payload: \{message}")
+    TooLarge(_) =>
+      raise RpmError::Corrupt(
+        offset=-1,
+        message="payload unpacks to more than \{max_unpacked} bytes",
+      )
+    Unsupported(message) =>
+      raise RpmError::Unsupported(message="payload: \{message}")
   }
   if raw.length() > max_unpacked {
     raise RpmError::Corrupt(
@@ -223,7 +237,7 @@ fn RpmPackage::raw_payload(
 
 ///|
 /// Decompress and parse the cpio payload. Raises `Unsupported` for payload
-/// formats or compressors other than cpio with gzip or no compression.
+/// formats other than cpio and for unknown compressors.
 pub fn RpmPackage::payload_entries(
   self : RpmPackage,
   max_unpacked~ : Int32 = 1073741824,

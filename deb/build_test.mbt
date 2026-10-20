@@ -77,8 +77,8 @@ fn open_deb(deb : Bytes) -> (@ar.Member, Bytes, Bytes) raise {
   ])
   (
     members[0],
-    @gzip.decompress(members[1].data),
-    @gzip.decompress(members[2].data),
+    @compress.decompress(members[1].data, Gzip),
+    @compress.decompress(members[2].data, Gzip),
   )
 }
 
@@ -339,4 +339,43 @@ test "paths too long for ustar use GNU long names so that dpkg can unpack them" 
     }
   }
   assert_eq(has_pax, false)
+}
+
+///|
+test "every compression yields a deb that reads back and verifies" {
+  let spec = sample_spec()
+  let kinds : Array[(@compress.Compression, String)] = [
+    (Gzip, ".gz"),
+    (Xz, ".xz"),
+    (Zstd, ".zst"),
+    (None, ""),
+  ]
+  for pair in kinds {
+    let deb = @deb.build(spec, compression=pair.0)
+    let members = @ar.parse(deb)
+    assert_eq(members.map(m => m.name), [
+      "debian-binary",
+      "control.tar" + pair.1,
+      "data.tar" + pair.1,
+    ])
+    let pkg = @deb.read(deb)
+    assert_eq(pkg.control_compression, pair.0.name())
+    assert_eq(pkg.data_compression, pair.0.name())
+    assert_eq(pkg.field("Package"), Some("hello"))
+    assert_eq(pkg.verify(), [])
+    // Same input, same bytes.
+    assert_eq(deb, @deb.build(spec, compression=pair.0))
+  }
+  // The default is gzip.
+  assert_eq(@deb.build(spec), @deb.build(spec, compression=Gzip))
+}
+
+///|
+test "lzma cannot be chosen for writing" {
+  try @deb.build(sample_spec(), compression=Lzma) catch {
+    @deb.DebError::Invalid(field~, ..) => assert_eq(field, "compression")
+    err => fail("unexpected \{err}")
+  } noraise {
+    _ => fail("expected an error")
+  }
 }

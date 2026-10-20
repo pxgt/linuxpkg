@@ -124,23 +124,35 @@ test "verify accepts a real rpm with all its digests" {
 }
 
 ///|
-test "xz and zstd payloads can be inspected but not verified" {
+test "xz and zstd payloads from rpmbuild are verified like gzip ones" {
   for pair in [(real_xz_rpm, "xz"), (real_zstd_rpm, "zstd")] {
     let bytes = decode_hex(pair.0)
     let pkg = @rpm.read(bytes)
     assert_eq(pkg.header.string(1000), Some("realrpm"))
     assert_eq(pkg.files().length(), 4)
     assert_eq(pkg.compressor(), pair.1)
-    inspect(
-      verify_outcome(bytes),
-      content="error: unsupported rpm: \{pair.1} compression of the payload is not supported (only gzip and uncompressed payloads)",
-    )
-    try pkg.payload_entries() catch {
-      Unsupported(..) => ()
-      err => fail("unexpected error \{err}")
-    } noraise {
-      _ => fail("expected an error")
+    inspect(verify_outcome(bytes), content="ok")
+    assert_eq(pkg.payload_entries().length(), 4)
+  }
+}
+
+///|
+test "an unknown payload compressor is unsupported" {
+  let pkg = @rpm.read(decode_hex(real_gzip_rpm))
+  assert_eq(pkg.compressor(), "gzip")
+  let tags = pkg.header.tags.map(t => {
+    if t.id == 1125 {
+      @rpm.Tag::{ id: 1125, value: @rpm.Value::Str("bzip2"), }
+    } else {
+      t
     }
+  })
+  let other = { ..pkg, header: { ..pkg.header, tags, }, }
+  try other.payload_entries() catch {
+    Unsupported(..) => ()
+    err => fail("unexpected error \{err}")
+  } noraise {
+    _ => fail("expected an error")
   }
 }
 
@@ -205,7 +217,7 @@ test "a file changed behind the digests' back is caught by file digests" {
   let forged_cpio = @cpio.build([
     @cpio.Entry::file("./opt/f", b"forgery", ino=1),
   ])
-  let forged = { ..pkg, payload: @gzip.compress(forged_cpio), }
+  let forged = { ..pkg, payload: @compress.compress(forged_cpio, Gzip), }
   let problems = forged.verify()
   assert_true(problems.length() > 0)
   assert_true(problems[0].contains("payload digest mismatch"))

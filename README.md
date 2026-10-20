@@ -3,13 +3,13 @@
 **English summary.** linuxpkg is a pure-MoonBit toolkit (library + command line) that builds,
 inspects and verifies Linux packages. From one JSON file it produces Debian/Ubuntu/UOS/Kylin
 `.deb` packages without `dpkg-deb` and `.rpm` packages (Fedora, openEuler, Anolis) without `rpmbuild`,
-and it can read and check existing `.deb` and `.rpm` files. Nothing is shelled out: because tar, ar and gzip
-are implemented in MoonBit, it runs on the wasm, wasm-gc, js and native backends, so you can build
+and it can read and check existing `.deb` and `.rpm` files, whether they use gzip, xz or zstd. Nothing is
+shelled out: because tar, ar, cpio and the compression (gzip, xz, zstd) are MoonBit code, it runs on the wasm, wasm-gc, js and native backends, so you can build
 Linux packages on Windows or macOS. Output depends only on the input, so builds are reproducible.
 Every package we write is checked against the official tools (`dpkg-deb`, `dpkg -i`, `lintian`, `rpm -K`,
 `rpm -V`, `rpm2cpio`) and installed in Debian, Ubuntu, Fedora and openEuler containers in CI.
 
-> 状态：0.2.0 已发布到 mooncakes（`Xpeng/linuxpkg`）。deb 和 rpm 的构建、检查、校验都已可用。
+> 状态：0.2.0 已发布到 mooncakes（`Xpeng/linuxpkg`）。deb 和 rpm 的构建、检查、校验都已可用；main 分支已支持 gzip / xz / zstd / 不压缩（下一个版本发布）。
 
 ## 它是什么
 
@@ -36,8 +36,9 @@ linuxpkg 是一个**纯 MoonBit** 实现的 Linux 软件包构建与检查工具
 | 读取 / 检查 / 校验 `.rpm`（头部摘要、payload 摘要、每个文件的摘要） | ✅ |
 | cpio（newc）读写 | ✅ |
 | 依赖关系：`depends`、`recommends`、`suggests`、`conflicts`、`replaces`、`provides`（带版本约束） | ✅ |
-| 读取 xz / zstd 压缩的包的元数据（`inspect`） | ✅ |
-| 校验 xz / zstd 压缩的包的文件内容 | ❌ 明确报 unsupported |
+| 压缩：gzip（默认）、xz、zstd、不压缩，deb 和 rpm 都能选（`--compression` 或配置里的 `compression`） | ✅ |
+| 读取并完整校验 gzip / xz / zstd / lzma / 不压缩的 deb 与 rpm，包括 Debian、Ubuntu、Fedora、openEuler 的真实发行版包 | ✅ |
+| 有界解压：xz、zstd、gzip 炸弹在解压前或解压中就被上限截住（默认 1 GiB） | ✅ |
 
 ## 安装与构建
 
@@ -48,7 +49,8 @@ moon add Xpeng/linuxpkg
 ```
 
 然后在 `moon.pkg` 里按需导入子包：`Xpeng/linuxpkg/spec`（包模型与配置）、`Xpeng/linuxpkg/deb`、`Xpeng/linuxpkg/rpm`、
-`Xpeng/linuxpkg/archive/tar`、`Xpeng/linuxpkg/archive/ar`、`Xpeng/linuxpkg/archive/cpio`。核心库不碰文件系统，可在所有后端运行。
+`Xpeng/linuxpkg/archive/tar`、`Xpeng/linuxpkg/archive/ar`、`Xpeng/linuxpkg/archive/cpio`、`Xpeng/linuxpkg/compress`（压缩与有界解压）。
+核心库不碰文件系统，可在所有后端运行。
 
 不安装，直接运行已发布的命令行程序（`moonx` 会下载预编译的 wasm 版本，文件路径请用绝对路径）：
 
@@ -71,6 +73,7 @@ moon run cmd/main --target wasm-gc -- --help
 ```sh
 linuxpkg init                                    # 写出一份示例 linuxpkg.json
 linuxpkg build examples/hello/linuxpkg.json --out dist     # 同时生成 deb 和 rpm（--format deb|rpm|all）
+linuxpkg build examples/hello/linuxpkg.json --compression zstd --out dist-zstd   # 换压缩：none|gzip|xz|zstd
 linuxpkg inspect dist/hello_1.0.0-1_all.deb      # 看元数据和文件列表
 linuxpkg inspect dist/hello-1.0.0-1.noarch.rpm --json
 linuxpkg verify dist/hello-1.0.0-1.noarch.rpm    # 退出码 0 表示通过
@@ -107,6 +110,9 @@ linuxpkg verify dist/hello-1.0.0-1.noarch.rpm    # 退出码 0 表示通过
   也可以把 `mode`、`owner`、`group`、`mtime` 放进 nFPM 风格的 `file_info`。
 - `arch` 接受 `amd64`、`x86_64`、`arm64`、`aarch64`、`all`、`noarch` 等写法，会自动换成 deb / rpm 各自的名字。
 - 版本里的预发布用 `~`（`1.0~rc1`），不要用 `-`。
+- `compression` 选 `none`、`gzip`（默认）、`xz`、`zstd`；也可以按格式覆盖，例如 `"deb": {"compression": "zstd"}`、`"rpm": {"compression": "xz"}`。
+  **实话实说**：现有的纯 MoonBit 压缩库里，xz 编码器压缩率不比 gzip 好、速度约 0.8 MB/s（native，wasm 更慢），zstd 编码器弱得多（文本上约是 gzip 的 2.4 倍大）；
+  产出的包都合法，官方工具都认。所以默认仍是 gzip，只有目标环境要求时才选 xz / zstd。数字见 [docs/formats.md](docs/formats.md)。
 - 路径必须是绝对路径，不能含 `..`，不能重复；错误信息会指出出错的字段（如 `contents[2].dst`）。
 - 没写 `mtime` 时，用环境变量 `SOURCE_DATE_EPOCH`，再没有就用 0。
 
@@ -119,20 +125,24 @@ linuxpkg verify dist/hello-1.0.0-1.noarch.rpm    # 退出码 0 表示通过
 - 我们生成的 rpm → `rpm -K`（头部与 payload 的 SHA-256 摘要 OK）、`rpm -qip`、`rpm -qlp`、`rpm -qcp`、`--scripts`、`--requires/--provides`、
   `rpm2cpio | cpio` 解出的文件与源文件逐字节相同；在私有 `--root` 里 `rpm -i`、`rpm -V`（无差异）、`rpm -e`；
   在 Fedora 41、openEuler 24.03 LTS 容器里 `rpm -ivh` / `dnf install` 都能装、能跑、脚本会执行、能卸载。
-- 官方工具生成的包（`dpkg-deb` 的 gzip / xz deb，`rpmbuild` 的 gzip / xz / zstd rpm）→ 我们的 `inspect` / `verify` 能正确读取，
-  rpm 的 SHA-1 / MD5 / SHA-256 头部摘要、payload 摘要和每个文件的摘要都会核对；xz / zstd 压缩的内容会明确报“不支持的压缩”，不会崩溃。
-- Fedora 官方仓库里下载的真实 rpm（zstd payload）：`inspect` 读到的名称、版本、release、架构、文件列表与 `rpm -qp` 一致。
+- 官方工具生成的包（`dpkg-deb` 的 gzip / xz / zstd / 不压缩 deb，`rpmbuild` 的 gzip / xz / zstd / 不压缩 rpm）→ 我们的 `inspect` / `verify` 能正确读取并**完整校验**，
+  rpm 的 SHA-1 / MD5 / SHA-256 头部摘要、payload 摘要和每个文件的摘要都会核对。
+- 每种压缩（gzip / xz / zstd / 不压缩）我们自己构建的 deb 和 rpm，都过一遍 `dpkg-deb`、`dpkg -i`、`rpm -K`、`rpm -qp --requires`（xz / zstd 带有对应的 `rpmlib(PayloadIs…)`）、
+  `rpm2cpio`、私有 root 安装和 `rpm -V`；Debian 12、Ubuntu 24.04、Fedora 41、openEuler 24.03 容器里 `dpkg -i` / `rpm -ivh` / `dnf install` 都能装、能跑、能卸载。
+- **真实发行版的包**也能完整校验（`inspect` 与 `dpkg-deb` / `rpm -qp` 一致，`verify` 退出码 0）：Debian 的 hello（xz，53 项校验）、Ubuntu 的 hello（zstd，6 项）、
+  Fedora 43 的 hello（zstd，49 项）、openEuler 24.03 的 tree（xz，6 项）；CI 里在容器中用发行版自己的 `apt-get download` / `dnf download` 再做一遍。
 - 我们写出的 ustar 归档与 GNU tar 1.34 逐字节一致；GNU tar 写出的 ustar / pax / gnu 三种格式我们都能读回。
-- 同样的输入构建两次，结果逐字节相同；wasm、wasm-gc、native 产出相同的包。
+- 同样的输入构建两次，结果逐字节相同；native、wasm、wasm-gc、js 四个后端对每种压缩都产出相同的包。
 
 一个实测发现：Ubuntu 22.04 的 `dpkg -i` 解不了 PAX 扩展头（`unsupported PAX tar header type 'x'`），
 所以 deb 里的长路径使用 GNU `L`/`K` 长名条目，与 `dpkg-deb` 自己的做法一致。
 
 ## 质量数字
 
-- 测试：179 个，wasm-gc、wasm、js、native 四个后端全部通过。
-- 核心包行覆盖率 **95.7%**（spec 97.6%、tar 97.3%、ar 96.4%、cpio 100%、deb 94.3%、rpm 94.1%、gunzip 88.2%），CI 强制不低于 80%（`tools/check_core_coverage.py`）。
-- 恶意输入：tar、ar、cpio、deb、rpm 的每一种截断和每个字节翻转都只会得到结果或明确的错误，不会崩溃；gzip 炸弹在解压时就被上限截住。
+- 测试：205 个，wasm-gc、wasm、js、native 四个后端全部通过。
+- 核心包行覆盖率 **95.1%**（spec 97.7%、tar 97.3%、ar 96.4%、cpio 100%、deb 94.4%、rpm 93.9%、compress 89.0%），CI 强制不低于 80%（`tools/check_core_coverage.py`）。
+- 恶意输入：tar、ar、cpio、deb、rpm 的每一种截断和每个字节翻转（gzip / xz / zstd / 不压缩各测一遍）都只会得到结果或明确的错误，不会崩溃；
+  gzip、xz、zstd 炸弹都被 1 GiB 默认上限截住（xz 和 zstd 在解压前就从块头 / 帧头算出解压后大小）。
 
 文档：[配置参考](docs/config.md)、[格式说明与和规范的差异](docs/formats.md)、[如何复现所有验证](docs/verification.md)、
 [贡献指南](CONTRIBUTING.md)、[安全策略](SECURITY.md)。
@@ -142,7 +152,7 @@ linuxpkg verify dist/hello-1.0.0-1.noarch.rpm    # 退出码 0 表示通过
 不做：
 
 - 包签名（GPG / PGP）、软件仓库元数据（apt 的 Release/Packages、yum 的 repodata）
-- xz / zstd / lzma / bzip2 压缩（只支持 gzip 和不压缩；读到其他压缩会报 `unsupported`）
+- bzip2 压缩（生态里没有可用的纯 MoonBit 实现；读到会明确报 `unsupported`）。`.lzma` 只能读，不能写。
 - Alpine apk、Arch pkg、源码包（`.dsc`、`.src.rpm`）
 - 自动分析二进制的动态库依赖
 - 运行维护者脚本（只负责打包，不负责安装）
@@ -157,7 +167,9 @@ linuxpkg verify dist/hello-1.0.0-1.noarch.rpm    # 退出码 0 表示通过
   linuxpkg 自己实现了 ar / tar / cpio，是为了完全控制确定性输出，并让归档格式与打包逻辑一起被官方工具验证；对这两个项目表示尊重。
 - 配置字段命名参考 [nFPM](https://github.com/goreleaser/nfpm)（MIT）。
 - rpm 的头部布局、tag 与不可变区域参考 [google/rpmpack](https://github.com/google/rpmpack)（Apache-2.0）的格式知识，以 rpm 官方工具的实测结果为准，用 MoonBit 重新实现，没有复制代码。
-- gzip 来自 [moonbit-community/flate](https://mooncakes.io/docs/moonbit-community/flate)，摘要来自 `moonbitlang/x/crypto`。
+- 压缩算法来自三个现成的 MoonBit 库：gzip 用 [moonbit-community/flate](https://mooncakes.io/docs/moonbit-community/flate)，
+  zstd 用 [Milky2018/zstd](https://mooncakes.io/docs/Milky2018/zstd)，xz 和 lzma 用
+  [aurora0x27/lzma-mbt](https://mooncakes.io/docs/aurora0x27/lzma-mbt)；摘要来自 `moonbitlang/x/crypto`。
 
 详见 [THIRD_PARTY.md](THIRD_PARTY.md)。
 
@@ -171,8 +183,8 @@ moon test --target wasm-gc                 # 也可以换 js、wasm；native 在
 tools/oracle/run.sh                        # 需要 dpkg-deb、dpkg、sudo（可选 lintian）
 ```
 
-目录：`spec/`（包模型、配置、校验）、`archive/tar|ar/`（归档格式）、`deb/`（deb 构建与读取）、`cmd/main/`（命令行）、
-`examples/`（示例）、`tools/oracle/`（官方工具验证脚本）。
+目录：`spec/`（包模型、配置、校验）、`archive/tar|ar|cpio/`（归档格式）、`compress/`（gzip / xz / zstd 压缩与有界解压）、
+`deb/`、`rpm/`（构建、读取、校验）、`cmd/main/`（命令行）、`examples/`（示例）、`tools/oracle/`（官方工具验证脚本）。
 
 ## 许可证
 

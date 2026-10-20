@@ -1,7 +1,6 @@
 #!/bin/bash
 # Regenerates deb/fixtures_test.mbt with debs written by the real dpkg-deb:
-# one with gzip members and one with xz members (which linuxpkg must report
-# as unsupported). Usage: tools/oracle/make_deb_fixtures.sh [output-file]
+# with gzip, xz and zstd members. Usage: tools/oracle/make_deb_fixtures.sh [output-file]
 set -e
 OUT="${1:-deb/fixtures_test.mbt}"
 case "$OUT" in /*) ;; *) OUT="$PWD/$OUT" ;; esac
@@ -36,15 +35,16 @@ find pkg -exec touch -h -d @1700000000 {} +
 export SOURCE_DATE_EPOCH=1700000000
 dpkg-deb --root-owner-group -Zgzip --build pkg real_gzip.deb >/dev/null
 dpkg-deb --root-owner-group -Zxz --build pkg real_xz.deb >/dev/null
+dpkg-deb --root-owner-group -Zzstd --build pkg real_zstd.deb >/dev/null
 DPKG_VERSION=$(dpkg-deb --version | head -n 1)
 python3 - "$OUT" "$DPKG_VERSION" <<'PY'
 import sys, binascii
 out = []
 out.append('///|')
 out.append('/// Debs written by the real dpkg-deb (%s) with' % sys.argv[2])
-out.append('/// `SOURCE_DATE_EPOCH=1700000000 dpkg-deb --root-owner-group -Z<gzip|xz> --build`.')
+out.append('/// `SOURCE_DATE_EPOCH=1700000000 dpkg-deb --root-owner-group -Z<gzip|xz|zstd> --build`.')
 out.append('/// Regenerate them with tools/oracle/make_deb_fixtures.sh.')
-for name, path in (('real_gzip_deb', 'real_gzip.deb'), ('real_xz_deb', 'real_xz.deb')):
+for name, path in (('real_gzip_deb', 'real_gzip.deb'), ('real_xz_deb', 'real_xz.deb'), ('real_zstd_deb', 'real_zstd.deb')):
     data = open(path, 'rb').read()
     hexed = binascii.hexlify(data).decode()
     out.append('')
@@ -57,5 +57,5 @@ PY
 echo "wrote $OUT"
 dpkg-deb --info real_gzip.deb | head -20
 dpkg-deb --contents real_gzip.deb
-ls -l real_gzip.deb real_xz.deb
+ls -l real_gzip.deb real_xz.deb real_zstd.deb
 rm -rf "$W"

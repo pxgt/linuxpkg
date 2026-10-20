@@ -3,12 +3,13 @@ package "Xpeng/linuxpkg/deb"
 
 import {
   "Xpeng/linuxpkg/archive/tar",
+  "Xpeng/linuxpkg/compress",
   "Xpeng/linuxpkg/spec",
   "moonbitlang/core/debug",
 }
 
 // Values
-pub fn build(@spec.PackageSpec) -> Bytes raise DebError
+pub fn build(@spec.PackageSpec, compression? : @compress.Compression) -> Bytes raise DebError
 
 pub fn control_file(@spec.PackageSpec) -> String
 
@@ -20,7 +21,7 @@ pub fn parse_control(String) -> Array[(String, String)] raise DebError
 
 pub fn parse_md5sums(String) -> Array[(String, String)] raise DebError
 
-pub fn read(BytesView, max_unpacked? : Int) -> DebPackage raise DebError
+pub fn read(BytesView, max_unpacked? : Int32) -> DebPackage raise DebError
 
 pub fn version_string(@spec.PackageSpec) -> String
 

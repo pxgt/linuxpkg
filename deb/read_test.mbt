@@ -170,11 +170,17 @@ test "the JSON report of a real deb" {
 }
 
 ///|
-test "xz members are reported as unsupported, not as corruption" {
-  inspect(
-    read_error(decode_hex(real_xz_deb)),
-    content="unsupported deb: control.tar.xz: xz compression is not supported (only gzip and uncompressed members)",
-  )
+test "debs written by dpkg-deb with xz and zstd members are read and verified" {
+  for pair in [(real_xz_deb, "xz"), (real_zstd_deb, "zstd")] {
+    let pkg = @deb.read(decode_hex(pair.0))
+    assert_eq(pkg.control_compression, pair.1)
+    assert_eq(pkg.data_compression, pair.1)
+    assert_eq(pkg.field("Package"), Some("realdeb"))
+    assert_eq(pkg.field("Version"), Some("2.5-3"))
+    assert_eq(pkg.files.length(), 8)
+    assert_eq(pkg.conffiles, ["/etc/realdeb.conf"])
+    assert_eq(pkg.verify(), [])
+  }
 }
 
 ///|
@@ -261,8 +267,8 @@ fn ar_with(members : Array[(String, Bytes)]) -> Bytes raise {
 ///|
 test "uncompressed members are accepted" {
   let built = @ar.parse(@deb.build(sample_package()))
-  let control = @gzip.decompress(built[1].data)
-  let data = @gzip.decompress(built[2].data)
+  let control = @compress.decompress(built[1].data, Gzip)
+  let data = @compress.decompress(built[2].data, Gzip)
   let plain = ar_with([
     ("debian-binary", b"2.0\n"),
     ("control.tar", control),
@@ -304,7 +310,7 @@ test "structural problems" {
         ("data.tar.zst", b""),
       ]),
     ),
-    content="unsupported deb: control.tar.zst: zstd compression is not supported (only gzip and uncompressed members)",
+    content="corrupt deb: control.tar.zst: zstd: input too short",
   )
   inspect(
     read_error(
