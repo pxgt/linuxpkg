@@ -393,7 +393,8 @@ signed_arch() { # key
     cat /tmp/nosig.txt
     # A damaged signature is refused.
     mkdir -p /tmp/badsig && cp "$f" /tmp/badsig/ && cp "$f.sig" /tmp/badsig/
-    printf "x" | dd of=/tmp/badsig/hello-1.0.0-1-any.pkg.tar.zst.sig bs=1 seek=40 conv=notrunc 2>/dev/null
+    size=$(stat -c %s /tmp/badsig/hello-1.0.0-1-any.pkg.tar.zst.sig)
+    printf "x" | dd of=/tmp/badsig/hello-1.0.0-1-any.pkg.tar.zst.sig bs=1 seek=$((size - 10)) conv=notrunc 2>/dev/null
     if pacman -U --noconfirm /tmp/badsig/hello-1.0.0-1-any.pkg.tar.zst >/tmp/badsig.txt 2>&1; then cat /tmp/badsig.txt; echo "pacman accepted a damaged signature"; exit 1; fi
     cat /tmp/badsig.txt
     grep -qiE "signature|invalid or corrupted" /tmp/badsig.txt
