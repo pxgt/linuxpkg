@@ -18,6 +18,7 @@ const USAGE : String =
   #|  linuxpkg inspect <package> [--json]      (.deb, .rpm, .apk or .pkg.tar.*)
   #|  linuxpkg verify <package|repository dir> [--keyring KEY]
   #|  linuxpkg repo <dir> [--format deb|rpm|all] [--sign-key KEY]
+  #|  linuxpkg key apk-pub|info <private key> [--name NAME] [--out DIR]
   #|  linuxpkg init [PATH] [--force]
   #|  linuxpkg --version
   #|
@@ -26,6 +27,8 @@ const USAGE : String =
   #|  inspect  Show the metadata and files of a package.
   #|  verify   Check the checksums of a package.
   #|  repo     Write apt and dnf repository metadata for the packages in a directory.
+  #|  key      Export the Alpine public key (apk-pub) of an RSA signing key, or show
+  #|           which key a file holds (info).
   #|  init     Write an example linuxpkg.json to edit.
   #|
   #|Options:
@@ -37,6 +40,8 @@ const USAGE : String =
   #|      --sign-key KEY    Sign with this OpenPGP private key (ASCII armor or binary, RSA or
   #|                       Ed25519, no passphrase): rpm packages, Arch packages (a .sig
   #|                       file next to them; build) and apt / dnf metadata (repo).
+  #|      --apk-key-name N Name of the Alpine public key in apk signatures (build; default
+  #|                       linuxpkg-<key id>.rsa.pub).
   #|      --keyring KEY    Public key(s) to check signatures against (verify): ASCII armor
   #|                       or binary. Packages and repositories that are not signed fail.
   #|      --json           Print machine readable JSON (inspect).
@@ -94,6 +99,7 @@ fn dispatch(command : String, args : Array[String]) -> Int32 raise CliError {
     "inspect" => cmd_inspect(args)
     "verify" => cmd_verify(args)
     "repo" => cmd_repo(args)
+    "key" => cmd_key(args)
     _ => raise Usage("unknown command \"\{command}\"")
   }
 }

@@ -49,14 +49,14 @@ test "signature status: unsigned, signed, good, bad" {
   let rsa = key_of(fx_rsa_secret)
   let signed = @rpm.sign(plain, rsa, created=signed_at)
   let ring = ring_of(fx_rsa_public + "\n" + fx_ed_public)
-  assert_eq(@rpm.read(plain).signature_status(None), Unsigned)
-  assert_eq(@rpm.read(plain).signature_status(Some(ring)), Unsigned)
+  assert_eq(@rpm.read(plain).signature_status(None), @sign.Unsigned)
+  assert_eq(@rpm.read(plain).signature_status(Some(ring)), @sign.Unsigned)
   assert_eq(
     @rpm.read(signed).signature_status(None),
-    Signed(key_id="03D2E4B8FA9AC68F"),
+    @sign.Signed(key_id="03D2E4B8FA9AC68F"),
   )
   match @rpm.read(signed).signature_status(Some(ring)) {
-    Good(verified) => {
+    @sign.Good(verified) => {
       assert_eq(verified.fingerprint, rsa.fingerprint())
       assert_eq(verified.created, signed_at)
     }
@@ -64,7 +64,7 @@ test "signature status: unsigned, signed, good, bad" {
   }
   // A keyring without the signing key.
   match @rpm.read(signed).signature_status(Some(ring_of(fx_ed_public))) {
-    Bad(message) => assert_true(message.contains("unknown key"))
+    @sign.Bad(message) => assert_true(message.contains("unknown key"))
     _ => fail("expected a bad signature")
   }
   // A changed main header no longer matches the signature.
@@ -76,12 +76,12 @@ test "signature status: unsigned, signed, good, bad" {
     header_bytes: Bytes::from_array(header),
   }
   match damaged.signature_status(Some(ring)) {
-    Bad(message) => assert_true(message.contains("does not match"))
+    @sign.Bad(message) => assert_true(message.contains("does not match"))
     _ => fail("expected a bad signature")
   }
   // The payload is not covered by the signature (its digest is in the header).
   let other_payload : @rpm.RpmPackage = { ..pkg, payload: b"changed", }
-  assert_true(other_payload.signature_status(Some(ring)) is Good(_))
+  assert_true(other_payload.signature_status(Some(ring)) is @sign.Good(_))
   assert_true(other_payload.verify().length() > 0)
 }
 
@@ -111,7 +111,7 @@ test "signing is reproducible and the time never precedes the key" {
   )
   let early = @rpm.sign(plain, key, created=0L)
   match @rpm.read(early).signature_status(Some(ring_of(fx_rsa_public))) {
-    Good(verified) => assert_eq(verified.created, key.created())
+    @sign.Good(verified) => assert_eq(verified.created, key.created())
     _ => fail("expected a good signature")
   }
 }

@@ -1,6 +1,6 @@
 ///|
 fn is_armored(data : Bytes) -> Bool {
-  let marker = "-----BEGIN PGP"
+  let marker = "-----BEGIN "
   if data.length() < marker.length() {
     return false
   }
@@ -50,5 +50,15 @@ fn load_keyring(path : String) -> @sign.PublicKeyring raise CliError {
   } catch {
     Failed(message) => raise Failed(message)
     err => raise Failed("\{path}: \{err}")
+  }
+}
+
+///|
+/// The name under which an Alpine public key is installed: the user's choice,
+/// or `linuxpkg-<key id>.rsa.pub`.
+fn apk_key_name(key : @sign.SigningKey, chosen : String?) -> String {
+  match chosen {
+    Some(name) => name
+    None => "linuxpkg-\{key.key_id().to_lower()}.rsa.pub"
   }
 }

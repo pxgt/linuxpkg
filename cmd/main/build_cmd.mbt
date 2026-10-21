@@ -35,6 +35,7 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
       "--compression": "compression",
       "-z": "compression",
       "--sign-key": "sign_key",
+      "--apk-key-name": "apk_key_name",
     },
     Map([]),
   )
@@ -78,6 +79,11 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
   let key = match key_path {
     Some(path) => Some(load_signing_key(path))
     None => None
+  }
+  let key_name = match (options.value("apk_key_name"), config.apk_key_name) {
+    (Some(name), _) => Some(name)
+    (None, Some(name)) => Some(name)
+    (None, None) => None
   }
   let out_dir = match options.value("out") {
     Some(dir) => dir
@@ -161,7 +167,37 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
           eprintln("linuxpkg: no Alpine Linux package: \{err}")
         }
     } noraise {
-      pkg => {
+      unsigned => {
+        // Alpine only knows RSA signatures: an Ed25519 key signs the other
+        // formats and leaves the apk unsigned (an error if apk was asked for).
+        let signing = match key {
+          Some(k) =>
+            if k.is_rsa() {
+              Some(k)
+            } else if format == "apk" {
+              raise Failed(
+                "apk packages can only be signed with an RSA key, \{key_path.unwrap()} is an Ed25519 key",
+              )
+            } else {
+              eprintln(
+                "linuxpkg: the apk package is not signed: Alpine only supports RSA keys",
+              )
+              None
+            }
+          None => None
+        }
+        let pkg = match signing {
+          Some(k) =>
+            @apk.sign(
+              unsigned,
+              k,
+              key_name=apk_key_name(k, key_name),
+              created=spec.mtime,
+            ) catch {
+              err => raise Failed("\{config_path}: \{err}")
+            }
+          None => unsigned
+        }
         let target = join_path(out_dir, @apk.file_name(spec))
         write_bytes(target, pkg)
         println("wrote \{target} (\{pkg.length()} bytes)")

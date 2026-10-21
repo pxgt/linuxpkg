@@ -12,6 +12,7 @@ the signatures themselves are assembled in linuxpkg so that the signature time i
 | dnf repository (`repo --sign-key`) | `repodata/repomd.xml` | `repodata/repomd.xml.asc` | dnf: `repo_gpgcheck=1`, `gpgkey=KEY` |
 | rpm package (`build --sign-key`) | the main header (the digest of the payload is inside it) | tag 268 (RSA) or 267 (Ed25519) of the signature header | `rpm -K`, dnf: `gpgcheck=1` |
 | Arch package (`build --sign-key`) | the whole package file | `<package>.sig` next to it | pacman: `SigLevel = Required` |
+| Alpine package (`build --sign-key`, RSA keys only) | the control stream (it holds the hash of the data) | a signature stream in front of the package: tar entry `.SIGN.RSA256.<key name>` | `apk add` with the public key in `/etc/apk/keys/` |
 | Debian package | not signed one by one | the repository's `Release` carries the trust | apt, through `InRelease` |
 
 Debian packages follow the Debian way: `dpkg` itself does not check a signature, apt checks the signed `Release` file,
@@ -29,6 +30,22 @@ are not used by the distributions and are not written.
 The configuration can name the key instead of the command line: `"sign_key": "keys/release.asc"` (relative to the
 configuration file); `--sign-key` wins. The key is never printed, and linuxpkg only reads it from the path you give.
 Do not commit a private key; use a CI secret.
+
+### Alpine
+
+apk only knows RSA, so only an RSA key signs `.apk` packages (an Ed25519 key signs the other formats and leaves the apk
+unsigned, with a note). The signature is a plain RSA PKCS#1 v1.5 signature with SHA-256 over the gzip bytes of the control
+stream; the entry is named after the public key file, which users must have in `/etc/apk/keys/`:
+
+```sh
+linuxpkg key apk-pub release.key.asc --name myproject --out .      # writes myproject.rsa.pub (PEM)
+linuxpkg build linuxpkg.json --format apk --sign-key release.key.asc --apk-key-name myproject.rsa.pub
+# on Alpine:  cp myproject.rsa.pub /etc/apk/keys/ && apk add ./hello-1.0.0-r1.apk
+```
+
+Without `--apk-key-name` the name is `linuxpkg-<key id>.rsa.pub` (`linuxpkg key info` shows the id). `verify --keyring`
+accepts the `.rsa.pub` file, or an OpenPGP public key of the same RSA key, and reads `.SIGN.RSA.` (SHA-1, what
+`abuild` writes) as well as `.SIGN.RSA256.` signatures.
 
 ## Reproducible signatures
 
@@ -56,8 +73,11 @@ exit status 2. Without one, the signature is only reported and the exit status d
 * `gpgv` accepts the detached and cleartext signatures; `gpg`'s own signatures verify with linuxpkg.
 * `rpm -Kv`: `Header V4 RSA/SHA256 Signature, key ID ...: OK` and `Header V4 EdDSA/SHA256 Signature ...: OK`;
   signatures made by `rpmsign --addsign` verify with `linuxpkg verify --keyring`.
-* apt, dnf and pacman install from signed repositories and packages in Debian, Ubuntu, Fedora, openEuler and Arch
-  containers, and refuse changed or unsigned ones (`tools/oracle/run.sh`, `tools/oracle/containers.sh`).
+* apt, dnf, pacman and apk install from signed repositories and packages in Debian, Ubuntu, Fedora, openEuler, Arch and
+  Alpine containers, and refuse changed, unsigned or wrongly signed ones (`tools/oracle/run.sh`,
+  `tools/oracle/containers.sh`). apk-tools 2.14 installs the signed `.apk` without `--allow-untrusted`; `openssl dgst
+  -sha256 -verify` checks the signature over the control stream; a package signed with `abuild-sign` verifies with
+  `linuxpkg verify --keyring`.
 
 ## Test keys
 

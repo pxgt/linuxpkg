@@ -22,6 +22,11 @@ All notable changes are recorded here. The format follows
 - `linuxpkg verify <package> [--keyring KEY]` reports the signature of rpm and Arch packages and checks it against
   the keys given; `verify <directory> --keyring KEY` checks `InRelease`, `Release.gpg` and `repomd.xml.asc`.
   A package without a valid signature fails with exit status 2 when a keyring is given.
+- Alpine packages are signed too (RSA keys): `build --sign-key KEY [--apk-key-name NAME]` puts a `.SIGN.RSA256.<name>`
+  signature stream in front of the package, `linuxpkg key apk-pub KEY` exports the `.rsa.pub` file for
+  `/etc/apk/keys/` (and `key info` shows a key), `verify --keyring` accepts that file; `apk add` installs without
+  `--allow-untrusted`. Library: `apk.sign`, `apk.sign_index`, `SigningKey::rsa_sign`, `rsa_public_pem`,
+  `PublicKeyring::from_pem`, `verify_rsa`.
 - Checked with `rpm -K`, `gpgv`, `rpmsign` (its signatures verify with `verify --keyring`), apt, dnf and pacman
   (`LocalFileSigLevel = Required`) in the Debian, Ubuntu, Fedora, openEuler and Arch containers, including changed
   and unsigned packages being refused.

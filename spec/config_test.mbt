@@ -152,7 +152,7 @@ test "malformed input is rejected with the field name" {
   )
   inspect(
     config_error(with_extra("\"colour\": \"red\"")),
-    content="colour: unknown field, expected one of: name, version, release, epoch, arch, maintainer, description, homepage, license, vendor, section, priority, depends, recommends, suggests, conflicts, replaces, provides, mtime, contents, scripts, compression, deb, rpm, pacman, sign_key",
+    content="colour: unknown field, expected one of: name, version, release, epoch, arch, maintainer, description, homepage, license, vendor, section, priority, depends, recommends, suggests, conflicts, replaces, provides, mtime, contents, scripts, compression, deb, rpm, pacman, sign_key, apk_key_name",
   )
 }
 
@@ -411,5 +411,18 @@ test "sign_key is a path in the configuration" {
   inspect(
     config_error(with_extra("\"sign_key\": 5")),
     content="sign_key: must be a string",
+  )
+}
+
+///|
+test "apk_key_name is a file name in the configuration" {
+  let config = @spec.Config::parse(
+    with_extra("\"apk_key_name\": \"mine.rsa.pub\""),
+  )
+  assert_eq(config.apk_key_name, Some("mine.rsa.pub"))
+  assert_eq(@spec.Config::parse(with_extra("\"epoch\": 1")).apk_key_name, None)
+  inspect(
+    config_error(with_extra("\"apk_key_name\": []")),
+    content="apk_key_name: must be a string",
   )
 }
