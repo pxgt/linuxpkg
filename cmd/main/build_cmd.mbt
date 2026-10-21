@@ -34,6 +34,7 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
       "-o": "out",
       "--compression": "compression",
       "-z": "compression",
+      "--sign-key": "sign_key",
     },
     Map([]),
   )
@@ -67,6 +68,17 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
     None => None
   }
   let (spec, config) = load_spec(config_path)
+  // --sign-key wins over "sign_key" in the configuration, whose path is
+  // relative to the configuration file.
+  let key_path = match (options.value("sign_key"), config.sign_key) {
+    (Some(path), _) => Some(path)
+    (None, Some(path)) => Some(join_path(dirname(config_path), path))
+    (None, None) => None
+  }
+  let key = match key_path {
+    Some(path) => Some(load_signing_key(path))
+    None => None
+  }
   let out_dir = match options.value("out") {
     Some(dir) => dir
     None => ""
@@ -89,8 +101,15 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
       Some(c) => c
       None => config.rpm_compression()
     }
-    let rpm = @rpm.build(spec, compression~) catch {
+    let unsigned = @rpm.build(spec, compression~) catch {
       err => raise Failed("\{config_path}: \{err}")
+    }
+    let rpm = match key {
+      Some(key) =>
+        @rpm.sign(unsigned, key, created=spec.mtime) catch {
+          err => raise Failed("\{config_path}: \{err}")
+        }
+      None => unsigned
     }
     let target = join_path(out_dir, @rpm.file_name(spec))
     write_bytes(target, rpm)
@@ -116,6 +135,19 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
         let target = join_path(out_dir, @arch.file_name(spec, compression~))
         write_bytes(target, pkg)
         println("wrote \{target} (\{pkg.length()} bytes)")
+        match key {
+          Some(key) => {
+            let signature = key.detached(
+              pkg[:],
+              created=key.signing_time(spec.mtime),
+            ) catch {
+              err => raise Failed("\{config_path}: \{err}")
+            }
+            write_bytes(target + ".sig", signature)
+            println("wrote \{target}.sig (\{signature.length()} bytes)")
+          }
+          None => ()
+        }
       }
     }
   }

@@ -441,3 +441,146 @@ test "repo --sign-key writes signatures that verify, and bad keys stop the comma
   }
   @fs.remove_dir(dir)
 }
+
+///|
+fn remove_tree(dir : String) -> Unit raise {
+  for name in @fs.read_dir(dir) {
+    let path = dir + "/" + name
+    if @fs.is_dir(path) {
+      remove_tree(path)
+    } else {
+      @fs.remove_file(path)
+    }
+  }
+  @fs.remove_dir(dir)
+}
+
+///|
+fn with_suffix(dir : String, suffix : String) -> Array[String] raise {
+  @fs.read_dir(dir).filter(name => name.has_suffix(suffix))
+}
+
+///|
+test "build --sign-key signs rpm and Arch packages and verify --keyring checks them" {
+  let dir = "cli_signpkg_tmp"
+  ensure_dir(dir)
+  write_bytes(dir + "/linuxpkg.json", @utf8.encode(CONFIG_JSON))
+  write_bytes(dir + "/tool.sh", b"#!/bin/sh\necho hi\n")
+  write_bytes(dir + "/rsa.asc", @utf8.encode(fx_rsa_secret))
+  write_bytes(dir + "/rsa.pub.asc", @utf8.encode(fx_rsa_public))
+  write_bytes(dir + "/ed.pub.asc", @utf8.encode(fx_ed_public))
+  let config = dir + "/linuxpkg.json"
+  assert_eq(run(["build", config, "--out", dir + "/plain"]), 0)
+  assert_eq(
+    run([
+      "build",
+      config,
+      "--out",
+      dir + "/signed",
+      "--sign-key",
+      dir + "/rsa.asc",
+    ]),
+    0,
+  )
+  let rpm = dir + "/signed/tinytool-1.0-1.noarch.rpm"
+  let plain_rpm = dir + "/plain/tinytool-1.0-1.noarch.rpm"
+  let arch = dir + "/signed/" + with_suffix(dir + "/signed", ".pkg.tar.xz")[0]
+  let plain_arch = dir +
+    "/plain/" +
+    with_suffix(dir + "/plain", ".pkg.tar.xz")[0]
+  assert_true(@fs.path_exists(arch + ".sig"))
+  assert_true(!@fs.path_exists(plain_arch + ".sig"))
+  // Without a keyring: reported, not checked, exit status unchanged.
+  assert_eq(run(["verify", rpm]), 0)
+  assert_eq(run(["verify", arch]), 0)
+  assert_eq(run(["verify", plain_rpm]), 0)
+  // With the right keyring.
+  assert_eq(run(["verify", rpm, "--keyring", dir + "/rsa.pub.asc"]), 0)
+  assert_eq(run(["verify", arch, "--keyring", dir + "/rsa.pub.asc"]), 0)
+  // The private key file works as a keyring too.
+  assert_eq(run(["verify", rpm, "--keyring", dir + "/rsa.asc"]), 0)
+  // Wrong key, unsigned package: exit status 2.
+  assert_eq(run(["verify", rpm, "--keyring", dir + "/ed.pub.asc"]), 2)
+  assert_eq(run(["verify", arch, "--keyring", dir + "/ed.pub.asc"]), 2)
+  assert_eq(run(["verify", plain_rpm, "--keyring", dir + "/rsa.pub.asc"]), 2)
+  assert_eq(run(["verify", plain_arch, "--keyring", dir + "/rsa.pub.asc"]), 2)
+  // A damaged Arch signature, and a package changed after signing.
+  let sig = read_bytes(arch + ".sig").to_array()
+  sig[sig.length() - 5] = sig[sig.length() - 5] ^ 1
+  write_bytes(dir + "/damaged.pkg.tar.xz", read_bytes(arch))
+  write_bytes(dir + "/damaged.pkg.tar.xz.sig", Bytes::from_array(sig))
+  assert_eq(
+    run([
+      "verify",
+      dir + "/damaged.pkg.tar.xz",
+      "--keyring",
+      dir + "/rsa.pub.asc",
+    ]),
+    2,
+  )
+  // deb and apk packages are not signed one by one.
+  let deb = dir + "/signed/tinytool_1.0-1_all.deb"
+  assert_eq(run(["verify", deb]), 0)
+  assert_eq(run(["verify", deb, "--keyring", dir + "/rsa.pub.asc"]), 1)
+  // Unusable keys and options.
+  assert_eq(run(["verify", rpm, "--keyring", dir + "/missing.asc"]), 1)
+  assert_eq(run(["verify", rpm, "--keyring"]), 1)
+  assert_eq(
+    run([
+      "build",
+      config,
+      "--sign-key",
+      dir + "/missing.asc",
+      "--out",
+      dir + "/x",
+    ]),
+    1,
+  )
+  // "sign_key" in the configuration is relative to the configuration file.
+  write_bytes(
+    config,
+    @utf8.encode(
+      CONFIG_JSON.replace(
+        old="\"mtime\"",
+        new="\"sign_key\": \"rsa.asc\", \"mtime\"",
+      ),
+    ),
+  )
+  assert_eq(
+    run(["build", config, "--format", "rpm", "--out", dir + "/viaconfig"]),
+    0,
+  )
+  assert_eq(
+    run([
+      "verify",
+      dir + "/viaconfig/tinytool-1.0-1.noarch.rpm",
+      "--keyring",
+      dir + "/rsa.pub.asc",
+    ]),
+    0,
+  )
+  // Repositories: signed by `repo`, checked as a directory.
+  assert_eq(run(["verify", dir + "/signed"]), 1)
+  assert_eq(run(["repo", dir + "/signed", "--sign-key", dir + "/rsa.asc"]), 0)
+  assert_eq(run(["verify", dir + "/signed"]), 0)
+  assert_eq(
+    run(["verify", dir + "/signed", "--keyring", dir + "/rsa.pub.asc"]),
+    0,
+  )
+  assert_eq(
+    run(["verify", dir + "/signed", "--keyring", dir + "/ed.pub.asc"]),
+    2,
+  )
+  assert_eq(run(["repo", dir + "/plain"]), 0)
+  assert_eq(run(["verify", dir + "/plain"]), 0)
+  assert_eq(
+    run(["verify", dir + "/plain", "--keyring", dir + "/rsa.pub.asc"]),
+    2,
+  )
+  write_bytes(dir + "/signed/Release", b"Origin: changed\n")
+  assert_eq(
+    run(["verify", dir + "/signed", "--keyring", dir + "/rsa.pub.asc"]),
+    2,
+  )
+  remove_tree(dir)
+}

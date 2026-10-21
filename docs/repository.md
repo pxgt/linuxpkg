@@ -64,23 +64,34 @@ linuxpkg lists them all (dnf resolves both the same way). The comparison runs in
 modification time found in the packages (deb file entries, rpm build time). Running the command again on the same
 directory therefore rewrites identical files.
 
-## Signing (not done by linuxpkg)
+## Signing
 
-linuxpkg does not sign anything. To sign with an external `gpg`:
+`linuxpkg repo <dir> --sign-key KEY` signs the indexes with an OpenPGP private key (RSA or Ed25519, armored or
+binary, no passphrase; see [signing.md](signing.md)):
+
+| Written next to the indexes | What it is |
+|---|---|
+| `InRelease` | `Release` as a cleartext-signed message (what current apt reads first) |
+| `Release.gpg` | armored detached signature over the exact bytes of `Release` |
+| `repodata/repomd.xml.asc` | armored detached signature over the exact bytes of `repodata/repomd.xml` |
+
+The signature time is the repository date (`SOURCE_DATE_EPOCH` or the packages' newest time), but never earlier than the
+key itself, so running the command again writes identical files. After signing, the command reads the signatures back
+and checks them with the key.
 
 ```sh
-# apt: detached signature and clear-signed release
-gpg --armor --detach-sign -o repo/Release.gpg repo/Release
-gpg --clearsign -o repo/InRelease repo/Release
-# then use  deb [signed-by=/usr/share/keyrings/mykey.gpg] https://example.org/repo ./
-
-# dnf: signature of repomd.xml
-gpg --armor --detach-sign repo/repodata/repomd.xml        # writes repomd.xml.asc
-# then in the .repo file:  repo_gpgcheck=1  gpgkey=https://example.org/key.pub
+linuxpkg repo repo --sign-key release.key.asc
+# users add the public key and the source; no [trusted=yes]:
+#   deb [signed-by=/etc/apt/keyrings/example.asc] https://example.org/repo ./
+# dnf: in the .repo file   repo_gpgcheck=1   gpgkey=https://example.org/example.asc
 ```
 
-Sign again whenever `linuxpkg repo` has rewritten the indexes. Signing the packages themselves (`rpm --addsign`,
-`dpkg-sig`) is also outside linuxpkg.
+Check a repository with `linuxpkg verify <dir> --keyring PUBLICKEY`; the exit status is 2 if a signature is missing or
+does not match. The signatures are checked in CI with `gpgv`, with apt (`signed-by`) and dnf (`repo_gpgcheck=1`) in
+Debian, Ubuntu, Fedora and openEuler containers, and a repository changed after signing is refused by all of them.
+
+Signing the rpm packages themselves (`gpgcheck=1`) is `build --sign-key`; Debian packages are not signed one by one
+(the repository's `Release` file carries the trust), see [signing.md](signing.md).
 
 ## As a library
 

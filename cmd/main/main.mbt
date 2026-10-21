@@ -14,9 +14,9 @@ const USAGE : String =
   #|linuxpkg - build Debian, RPM and Arch Linux packages without dpkg-deb or rpmbuild
   #|
   #|Usage:
-  #|  linuxpkg build <config.json> [--format deb|rpm|arch|apk|all] [--compression C] [--out DIR]
+  #|  linuxpkg build <config.json> [--format deb|rpm|arch|apk|all] [--compression C] [--sign-key KEY] [--out DIR]
   #|  linuxpkg inspect <package> [--json]      (.deb, .rpm, .apk or .pkg.tar.*)
-  #|  linuxpkg verify <package>
+  #|  linuxpkg verify <package|repository dir> [--keyring KEY]
   #|  linuxpkg repo <dir> [--format deb|rpm|all] [--sign-key KEY]
   #|  linuxpkg init [PATH] [--force]
   #|  linuxpkg --version
@@ -34,8 +34,11 @@ const USAGE : String =
   #|  -z, --compression C  Payload compression: none, gzip, xz or zstd. Overrides
   #|                       the configuration (default: gzip).
   #|  -o, --out DIR        Directory for the packages (default: current directory).
-  #|      --sign-key KEY    Sign the repository with this OpenPGP private key (repo): ASCII
-  #|                       armor or binary, RSA or Ed25519, no passphrase.
+  #|      --sign-key KEY    Sign with this OpenPGP private key (ASCII armor or binary, RSA or
+  #|                       Ed25519, no passphrase): rpm packages, Arch packages (a .sig
+  #|                       file next to them; build) and apt / dnf metadata (repo).
+  #|      --keyring KEY    Public key(s) to check signatures against (verify): ASCII armor
+  #|                       or binary. Packages and repositories that are not signed fail.
   #|      --json           Print machine readable JSON (inspect).
   #|      --force          Overwrite an existing file (init).
   #|  -h, --help           Show this help.

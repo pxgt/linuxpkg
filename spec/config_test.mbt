@@ -152,7 +152,7 @@ test "malformed input is rejected with the field name" {
   )
   inspect(
     config_error(with_extra("\"colour\": \"red\"")),
-    content="colour: unknown field, expected one of: name, version, release, epoch, arch, maintainer, description, homepage, license, vendor, section, priority, depends, recommends, suggests, conflicts, replaces, provides, mtime, contents, scripts, compression, deb, rpm, pacman",
+    content="colour: unknown field, expected one of: name, version, release, epoch, arch, maintainer, description, homepage, license, vendor, section, priority, depends, recommends, suggests, conflicts, replaces, provides, mtime, contents, scripts, compression, deb, rpm, pacman, sign_key",
   )
 }
 
@@ -398,5 +398,18 @@ test "compression: invalid values name their field" {
   inspect(
     config_error(with_extra("\"rpm\": 3")),
     content="rpm: must be an object",
+  )
+}
+
+///|
+test "sign_key is a path in the configuration" {
+  let config = @spec.Config::parse(
+    with_extra("\"sign_key\": \"keys/release.asc\""),
+  )
+  assert_eq(config.sign_key, Some("keys/release.asc"))
+  assert_eq(@spec.Config::parse(with_extra("\"epoch\": 1")).sign_key, None)
+  inspect(
+    config_error(with_extra("\"sign_key\": 5")),
+    content="sign_key: must be a string",
   )
 }

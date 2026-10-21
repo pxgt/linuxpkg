@@ -284,13 +284,17 @@ step "building signed repositories (test-only RSA and Ed25519 keys)"
 for k in rsa2048 ed25519; do
   mkdir -p "$WORK/signed-deb-$k" "$WORK/signed-rpm-$k"
   cp "$WORK"/repo-deb/*.deb "$WORK/signed-deb-$k/"
-  cp "$WORK"/repo-rpm/*.rpm "$WORK/signed-rpm-$k/"
+  # The rpm packages carry their own signature too (gpgcheck=1 needs it).
+  "$BIN" build examples/hello/linuxpkg.json --format rpm --compression zstd --out "$WORK/signed-rpm-$k" --sign-key "testdata/sign/test-only-$k.sec.asc" >/dev/null
+  "$BIN" build "$WORK/demo/linuxpkg.json" --format rpm --compression xz --out "$WORK/signed-rpm-$k" --sign-key "testdata/sign/test-only-$k.sec.asc" >/dev/null
+  # Arch packages with a detached signature next to them.
+  "$BIN" build examples/hello/linuxpkg.json --format arch --out "$WORK/signed-arch-$k" --sign-key "testdata/sign/test-only-$k.sec.asc" >/dev/null
   "$BIN" repo "$WORK/signed-deb-$k" --format deb --sign-key "testdata/sign/test-only-$k.sec.asc"
   "$BIN" repo "$WORK/signed-rpm-$k" --format rpm --sign-key "testdata/sign/test-only-$k.sec.asc"
   mkdir -p "$WORK/keys-$k"
   cp "testdata/sign/test-only-$k.pub.asc" "$WORK/keys-$k/key.asc"
 done
-chmod -R a+rX "$WORK"/signed-deb-* "$WORK"/signed-rpm-* "$WORK"/keys-*
+chmod -R a+rX "$WORK"/signed-deb-* "$WORK"/signed-rpm-* "$WORK"/signed-arch-* "$WORK"/keys-*
 
 signed_deb() { # image key
   local image="$1" key="$2"
@@ -325,14 +329,14 @@ signed_deb() { # image key
 
 signed_rpm() { # image key
   local image="$1" key="$2"
-  step "$image: dnf with repo_gpgcheck=1 accepts the $key repository and refuses a changed one"
-  docker run --rm -v "$WORK/signed-rpm-$key:/repo:ro" -v "$WORK/keys-$key:/keys:ro" "$image" bash -ec '
+  step "$image: dnf with gpgcheck=1 and repo_gpgcheck=1 accepts the $key repository and refuses changed or unsigned ones"
+  docker run --rm -v "$WORK/signed-rpm-$key:/repo:ro" -v "$WORK/repo-rpm:/unsigned:ro" -v "$WORK/keys-$key:/keys:ro" "$image" bash -ec '
     cat > /etc/yum.repos.d/linuxpkg.repo <<REPO
 [linuxpkg]
 name=linuxpkg
 baseurl=file:///repo
 enabled=1
-gpgcheck=0
+gpgcheck=1
 repo_gpgcheck=1
 gpgkey=file:///keys/key.asc
 REPO
@@ -340,6 +344,11 @@ REPO
     dnf -y --disablerepo="*" --enablerepo=linuxpkg install linuxpkg-demo
     test "$(hello)" = "hello from linuxpkg"
     test "$(linuxpkg-demo)" = "demo from linuxpkg"
+    # The packages themselves are signed: rpm checks them with the imported key.
+    rpm -q gpg-pubkey | grep -q gpg-pubkey
+    rpm -K /repo/hello-1.0.0-1.noarch.rpm | tee /tmp/k.txt
+    grep -q "signatures OK" /tmp/k.txt
+    rpm -qi hello | grep -E "^Signature"
     dnf remove -y linuxpkg-demo hello
     # repomd.xml changed after signing: dnf must refuse it.
     cp -r /repo /tmp/bad
@@ -352,7 +361,47 @@ REPO
     cat /tmp/bad.txt
     grep -iE "GPG signature verification error" /tmp/bad.txt
     test ! -e /usr/bin/linuxpkg-demo
+    # Packages without a signature are refused when gpgcheck=1 (no repo_gpgcheck here).
+    sed -i "s#file:///tmp/bad#file:///unsigned#; s#^repo_gpgcheck=1#repo_gpgcheck=0#" /etc/yum.repos.d/linuxpkg.repo
+    dnf clean all
+    if dnf -y --disablerepo="*" --enablerepo=linuxpkg install linuxpkg-demo >/tmp/unsigned.txt 2>&1; then
+      cat /tmp/unsigned.txt; echo "dnf installed an unsigned package with gpgcheck=1"; exit 1
+    fi
+    cat /tmp/unsigned.txt
+    grep -iE "not signed|GPG|signature" /tmp/unsigned.txt
+    test ! -e /usr/bin/linuxpkg-demo
     echo "signed dnf repository check passed on $(. /etc/os-release && echo "$PRETTY_NAME")"
+  '
+}
+
+signed_arch() { # key
+  local key="$1"
+  step "archlinux:latest: pacman with LocalFileSigLevel = Required installs the $key-signed package and refuses damaged ones"
+  local fpr
+  fpr="$(awk -v k="$key" '$1==k {print $2}' testdata/sign/fingerprints.txt)"
+  docker run --rm -e "FPR=$fpr" -v "$WORK/signed-arch-$key:/pkgs:ro" -v "$WORK/keys-$key:/keys:ro" archlinux:latest bash -ec '
+    sed -i "/^NoExtract/d" /etc/pacman.conf
+    pacman-key --init
+    pacman-key --add /keys/key.asc
+    pacman-key --lsign-key "$FPR"
+    sed -i "s/^#\?LocalFileSigLevel.*/LocalFileSigLevel = Required/" /etc/pacman.conf
+    grep -q "^LocalFileSigLevel = Required" /etc/pacman.conf || echo "LocalFileSigLevel = Required" >> /etc/pacman.conf
+    f=$(ls /pkgs/hello-1.0.0-1-any.pkg.tar.zst)
+    # A package without its signature is refused.
+    mkdir -p /tmp/nosig && cp "$f" /tmp/nosig/
+    if pacman -U --noconfirm /tmp/nosig/hello-1.0.0-1-any.pkg.tar.zst >/tmp/nosig.txt 2>&1; then cat /tmp/nosig.txt; echo "pacman accepted an unsigned package"; exit 1; fi
+    cat /tmp/nosig.txt
+    # A damaged signature is refused.
+    mkdir -p /tmp/badsig && cp "$f" /tmp/badsig/ && cp "$f.sig" /tmp/badsig/
+    printf "x" | dd of=/tmp/badsig/hello-1.0.0-1-any.pkg.tar.zst.sig bs=1 seek=40 conv=notrunc 2>/dev/null
+    if pacman -U --noconfirm /tmp/badsig/hello-1.0.0-1-any.pkg.tar.zst >/tmp/badsig.txt 2>&1; then cat /tmp/badsig.txt; echo "pacman accepted a damaged signature"; exit 1; fi
+    cat /tmp/badsig.txt
+    grep -qiE "signature|invalid or corrupted" /tmp/badsig.txt
+    # The genuine package installs.
+    pacman -U --noconfirm "$f"
+    test "$(hello)" = "hello from linuxpkg"
+    pacman -Qkk hello
+    echo "signed pacman check passed on $(. /etc/os-release && echo "$PRETTY_NAME")"
   '
 }
 
@@ -530,6 +579,8 @@ run_deb debian:12
 run_deb ubuntu:24.04
 run_rpm fedora:41
 arch_check
+signed_arch rsa2048
+signed_arch ed25519
 arch_real
 apk_check
 apk_real

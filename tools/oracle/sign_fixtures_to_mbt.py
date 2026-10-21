@@ -52,7 +52,7 @@ for n, v in (('rsa2048', 'rsa'), ('ed25519', 'ed')):
 write(os.path.join(root, 'sign', 'fixtures_test.mbt'), out)
 
 # Which keys each signing package's tests use (an unused fixture is a warning).
-USES = {'repo': ['ed'], 'cmd/main': ['ed']}
+USES = {'repo': ['ed'], 'rpm': ['rsa', 'ed'], 'cmd/main': ['ed', 'rsa']}
 NAMES = {'rsa': 'rsa2048', 'ed': 'ed25519'}
 for pkg, which in USES.items():
     if not os.path.isdir(os.path.join(root, pkg)):

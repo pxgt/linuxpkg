@@ -140,6 +140,20 @@ pub fn SigningKey::created(self : SigningKey) -> Int64 {
 }
 
 ///|
+/// The time to write into a signature of something built at `build_time`:
+/// the build time, but never earlier than the key itself, because `gpgv`,
+/// `rpm` and `pacman` refuse a signature that is older than its key. This
+/// keeps builds with `SOURCE_DATE_EPOCH=0` signable and reproducible.
+pub fn SigningKey::signing_time(self : SigningKey, build_time : Int64) -> Int64 {
+  let key_time = self.created()
+  if build_time > key_time {
+    build_time
+  } else {
+    key_time
+  }
+}
+
+///|
 /// `true` for an RSA key, `false` for an Ed25519 key.
 pub fn SigningKey::is_rsa(self : SigningKey) -> Bool {
   self.rsa is Some(_)
