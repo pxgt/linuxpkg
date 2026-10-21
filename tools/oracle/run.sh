@@ -645,6 +645,65 @@ PY
   fi
 fi
 
+# ---------------------------------------------------------------- signed repositories
+if command -v gpgv >/dev/null 2>&1 && command -v gpg >/dev/null 2>&1; then
+  step "sign: repositories signed by linuxpkg are accepted by gpgv, apt and rejected when changed"
+  SIGND="$WORK/sign"
+  mkdir -p "$SIGND"
+  export GNUPGHOME="$WORK/gnupg"
+  mkdir -p "$GNUPGHOME" && chmod 700 "$GNUPGHOME"
+  for KEY in rsa2048 ed25519; do
+    SECRET="$ROOT/testdata/sign/test-only-$KEY.sec.asc"
+    gpg --batch --dearmor <"$ROOT/testdata/sign/test-only-$KEY.pub.asc" >"$SIGND/$KEY.gpg"
+    RD="$SIGND/$KEY"
+    mkdir -p "$RD/deb" "$RD/rpm"
+    cp "$REPOD"/deb/*.deb "$RD/deb/"
+    SOURCE_DATE_EPOCH=1700000000 "$BIN" repo "$RD/deb" --format deb --sign-key "$SECRET" >/dev/null
+    gpgv --keyring "$SIGND/$KEY.gpg" "$RD/deb/Release.gpg" "$RD/deb/Release" 2>"$SIGND/gpgv.txt" || { cat "$SIGND/gpgv.txt"; die "$KEY: gpgv rejects Release.gpg"; }
+    expect_in "$KEY: gpgv says Good signature for Release.gpg" "Good signature" "$(cat "$SIGND/gpgv.txt")"
+    gpgv --keyring "$SIGND/$KEY.gpg" "$RD/deb/InRelease" 2>"$SIGND/gpgv.txt" || { cat "$SIGND/gpgv.txt"; die "$KEY: gpgv rejects InRelease"; }
+    expect_in "$KEY: gpgv says Good signature for InRelease" "Good signature" "$(cat "$SIGND/gpgv.txt")"
+    # The text gpg extracts from InRelease is the Release file.
+    gpg --batch --no-default-keyring --keyring "$SIGND/$KEY.gpg" --decrypt "$RD/deb/InRelease" >"$SIGND/Release.out" 2>/dev/null || true
+    cmp "$SIGND/Release.out" "$RD/deb/Release"
+    pass "$KEY: the text inside InRelease is the Release file"
+    # Reproducible: signing again gives the same bytes.
+    cp "$RD/deb/InRelease" "$SIGND/InRelease.1"
+    SOURCE_DATE_EPOCH=1700000000 "$BIN" repo "$RD/deb" --format deb --sign-key "$SECRET" >/dev/null
+    cmp "$SIGND/InRelease.1" "$RD/deb/InRelease"
+    pass "$KEY: signing twice gives identical bytes"
+    # apt checks the signature without [trusted=yes].
+    echo "deb [signed-by=$SIGND/$KEY.gpg] file:$RD/deb ./" >"$WORK/repo.list"
+    rm -rf "$WORK/apt-lists" && mkdir -p "$WORK/apt-lists/partial"
+    $SUDO apt-get $APT_OPTS update >"$WORK/apt-update.txt" 2>&1 || { cat "$WORK/apt-update.txt"; die "$KEY: apt-get update rejects the signed repository"; }
+    expect_in "$KEY: apt sees the package from the signed repository" "linuxpkg-demo" "$(apt-cache $APT_OPTS policy linuxpkg-demo)"
+    # A tampered Release is refused by apt and gpgv.
+    cp "$RD/deb/Release" "$SIGND/Release.good"
+    cp "$RD/deb/InRelease" "$SIGND/InRelease.good"
+    sed -i 's/^Date: .*/Date: Tue, 14 Nov 2023 22:13:21 +0000/' "$RD/deb/Release"
+    if gpgv --keyring "$SIGND/$KEY.gpg" "$RD/deb/Release.gpg" "$RD/deb/Release" 2>"$SIGND/gpgv.txt"; then die "$KEY: gpgv accepted a changed Release"; fi
+    expect_in "$KEY: gpgv reports a bad signature" "BAD signature" "$(cat "$SIGND/gpgv.txt")"
+    sed -i 's/^Date: .*/Date: Tue, 14 Nov 2023 22:13:21 +0000/' "$RD/deb/InRelease"
+    rm -rf "$WORK/apt-lists" && mkdir -p "$WORK/apt-lists/partial"
+    if $SUDO apt-get $APT_OPTS update >"$WORK/apt-update.txt" 2>&1; then
+      cat "$WORK/apt-update.txt"; die "$KEY: apt accepted a changed InRelease"
+    fi
+    expect_in "$KEY: apt refuses the changed InRelease" "not signed" "$(cat "$WORK/apt-update.txt")"
+    cp "$SIGND/Release.good" "$RD/deb/Release"
+    cp "$SIGND/InRelease.good" "$RD/deb/InRelease"
+    if [ "$HAVE_RPM" = 1 ]; then
+      cp "$REPOD"/rpm/*.rpm "$RD/rpm/"
+      SOURCE_DATE_EPOCH=1700000000 "$BIN" repo "$RD/rpm" --format rpm --sign-key "$SECRET" >/dev/null
+      gpgv --keyring "$SIGND/$KEY.gpg" "$RD/rpm/repodata/repomd.xml.asc" "$RD/rpm/repodata/repomd.xml" 2>"$SIGND/gpgv.txt" || { cat "$SIGND/gpgv.txt"; die "$KEY: gpgv rejects repomd.xml.asc"; }
+      expect_in "$KEY: gpgv says Good signature for repomd.xml.asc" "Good signature" "$(cat "$SIGND/gpgv.txt")"
+      printf ' ' >>"$RD/rpm/repodata/repomd.xml"
+      if gpgv --keyring "$SIGND/$KEY.gpg" "$RD/rpm/repodata/repomd.xml.asc" "$RD/rpm/repodata/repomd.xml" 2>/dev/null; then die "$KEY: gpgv accepted a changed repomd.xml"; fi
+      pass "$KEY: gpgv refuses a changed repomd.xml"
+    fi
+  done
+  unset GNUPGHOME
+fi
+
 # ---------------------------------------------------------------- arch linux
 if command -v bsdtar >/dev/null 2>&1; then
   step "arch: packages for pacman, read back with bsdtar (libarchive, pacman's own reader)"
