@@ -51,45 +51,29 @@ pub fn sign(
 }
 
 ///|
-/// What a package says about its OpenPGP signature.
-///
-/// - `Unsigned`: the signature header has no RSA or DSA signature.
-/// - `Signed`: signed by this key id (16 hexadecimal digits); not checked,
-///   because no keyring was given.
-/// - `Good`: the signature checks out against a key of the keyring.
-/// - `Bad`: the signature is damaged, does not match the main header, or was
-///   made by a key that is not in the keyring; the text says which.
-pub(all) enum SignatureStatus {
-  Unsigned
-  Signed(key_id~ : String)
-  Good(@sign.Verified)
-  Bad(String)
-} derive(Eq, Debug)
-
-///|
 /// Look at the OpenPGP signature of the main header, and check it against
 /// `keyring` if one is given.
 pub fn RpmPackage::signature_status(
   self : RpmPackage,
   keyring : @sign.PublicKeyring?,
-) -> SignatureStatus {
+) -> @sign.SignatureStatus {
   let signature = match
     (self.signature.get(SIG_RSA), self.signature.get(SIG_DSA)) {
     (Some(Bin(data)), _) => data
     (_, Some(Bin(data))) => data
-    _ => return Unsigned
+    _ => return @sign.Unsigned
   }
   match keyring {
     None =>
       try {
         let info = @sign.signature_info(signature)
-        Signed(key_id=info.key_id)
+        @sign.Signed(key_id=info.key_id)
       } catch {
-        err => Bad("\{err}")
+        err => @sign.Bad("\{err}")
       }
     Some(ring) =>
       Good(ring.verify_detached(self.header_bytes[:], signature)) catch {
-        err => Bad("\{err}")
+        err => @sign.Bad("\{err}")
       }
   }
 }

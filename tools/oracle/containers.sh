@@ -540,6 +540,68 @@ apk_check() {
   '
 }
 
+signed_apk() {
+  step "alpine:3.20: apk add without --allow-untrusted installs the signed package, refuses others; abuild-signed packages verify"
+  local d="$WORK/signed-apk"
+  mkdir -p "$d/keys" "$d/pkgs" "$d/parts"
+  "$BIN" build examples/hello/linuxpkg.json --format apk --out "$d/pkgs" --sign-key testdata/sign/test-only-rsa2048.sec.asc --apk-key-name linuxpkg-test.rsa.pub >/dev/null
+  "$BIN" key apk-pub testdata/sign/test-only-rsa2048.sec.asc --name linuxpkg-test --out "$d/keys" >/dev/null
+  # An unsigned package split into its control and data streams, for abuild-sign.
+  "$BIN" build examples/hello/linuxpkg.json --format apk --out "$d/parts" >/dev/null
+  python3 - "$d/parts/hello-1.0.0-r1.apk" "$d/parts" <<'PY'
+import sys, zlib
+data = open(sys.argv[1], "rb").read()
+members, pos = [], 0
+while pos < len(data):
+    d = zlib.decompressobj(31)
+    d.decompress(data[pos:])
+    used = len(data[pos:]) - len(d.unused_data)
+    members.append(data[pos:pos + used])
+    pos += used
+open(sys.argv[2] + "/control.tar.gz", "wb").write(members[0])
+open(sys.argv[2] + "/data.tar.gz", "wb").write(members[1])
+PY
+  chmod -R a+rwX "$d"
+  docker run --rm -v "$d:/work" alpine:3.20 sh -ec '
+    cp /work/keys/linuxpkg-test.rsa.pub /etc/apk/keys/
+    apk add /work/pkgs/hello-1.0.0-r1.apk
+    test "$(hello)" = "hello from linuxpkg"
+    test "$(cat /var/lib/hello/state)" = installed
+    apk verify /work/pkgs/hello-1.0.0-r1.apk
+    apk audit --full | grep -E " (usr/bin/(hello|hi)|etc/hello.conf|usr/share/doc/hello|var/lib/hello)" && exit 1
+    apk del hello
+    # Without the key the package is untrusted.
+    rm /etc/apk/keys/linuxpkg-test.rsa.pub
+    if apk add /work/pkgs/hello-1.0.0-r1.apk >/tmp/untrusted.txt 2>&1; then cat /tmp/untrusted.txt; echo "apk installed an untrusted package"; exit 1; fi
+    cat /tmp/untrusted.txt
+    grep -q "UNTRUSTED signature" /tmp/untrusted.txt
+    test ! -e /usr/bin/hello
+    # Another key under the same name: the signature does not match.
+    apk add --no-cache openssl abuild >/dev/null
+    openssl genrsa -out /work/other.rsa 2048 2>/dev/null
+    openssl rsa -in /work/other.rsa -pubout -out /work/other.rsa.pub 2>/dev/null
+    cp /work/other.rsa.pub /etc/apk/keys/linuxpkg-test.rsa.pub
+    if apk add /work/pkgs/hello-1.0.0-r1.apk >/tmp/wrongkey.txt 2>&1; then cat /tmp/wrongkey.txt; echo "apk accepted another key"; exit 1; fi
+    cat /tmp/wrongkey.txt
+    test ! -e /usr/bin/hello
+    # A package signed by the real abuild-sign (SHA-1, .SIGN.RSA.): same layout as abuild makes it.
+    cd /work/parts
+    abuild-sign -k /work/other.rsa -p linuxpkg-test.rsa.pub control.tar.gz
+    cat control.tar.gz data.tar.gz > /work/abuild-signed.apk
+    apk add /work/abuild-signed.apk
+    test "$(hello)" = "hello from linuxpkg"
+    apk del hello
+    chmod a+r /work/other.rsa.pub /work/abuild-signed.apk
+    echo "signed apk check passed on $(. /etc/os-release && echo "$PRETTY_NAME")"
+  '
+  # What abuild-sign made is accepted by linuxpkg too.
+  "$BIN" verify "$d/abuild-signed.apk" --keyring "$d/other.rsa.pub" | tee "$d/verify.out"
+  grep -q "signature: OK" "$d/verify.out" || die "verify --keyring did not accept the abuild-signed package"
+  if "$BIN" verify "$d/abuild-signed.apk" --keyring "$d/keys/linuxpkg-test.rsa.pub" >/dev/null 2>&1; then die "verify accepted the wrong key"; fi
+  echo "  ok: linuxpkg verifies the abuild-signed package and refuses the wrong key"
+  docker run --rm -v "$d:/work" alpine:3.20 sh -c 'rm -rf /work/*'
+}
+
 apk_real() {
   step "alpine:3.20: linuxpkg reads and verifies packages from Alpine's build servers"
   local dir="$WORK/real-alpine"
@@ -584,6 +646,7 @@ signed_arch rsa2048
 signed_arch ed25519
 arch_real
 apk_check
+signed_apk
 apk_real
 repo_deb debian:12
 repo_deb ubuntu:24.04

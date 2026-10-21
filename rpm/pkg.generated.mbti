@@ -60,16 +60,9 @@ pub(all) struct RpmPackage {
 pub fn RpmPackage::compressor(Self) -> String
 pub fn RpmPackage::files(Self) -> Array[RpmFile] raise RpmError
 pub fn RpmPackage::payload_entries(Self, max_unpacked? : Int32) -> Array[@cpio.Entry] raise RpmError
-pub fn RpmPackage::signature_status(Self, @sign.PublicKeyring?) -> SignatureStatus
+pub fn RpmPackage::signature_status(Self, @sign.PublicKeyring?) -> @sign.SignatureStatus
 pub fn RpmPackage::to_json(Self) -> Json raise RpmError
 pub fn RpmPackage::verify(Self) -> Array[String] raise RpmError
-
-pub(all) enum SignatureStatus {
-  Unsigned
-  Signed(key_id~ : String)
-  Good(@sign.Verified)
-  Bad(String)
-} derive(Eq, @debug.Debug)
 
 pub(all) struct Tag {
   id : Int32

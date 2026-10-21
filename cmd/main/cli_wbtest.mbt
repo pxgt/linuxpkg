@@ -584,3 +584,144 @@ test "build --sign-key signs rpm and Arch packages and verify --keyring checks t
   )
   remove_tree(dir)
 }
+
+///|
+test "apk signing: build --sign-key, key apk-pub, verify --keyring" {
+  let dir = "cli_signapk_tmp"
+  ensure_dir(dir)
+  write_bytes(dir + "/linuxpkg.json", @utf8.encode(CONFIG_JSON))
+  write_bytes(dir + "/tool.sh", b"#!/bin/sh\necho hi\n")
+  write_bytes(dir + "/rsa.asc", @utf8.encode(fx_rsa_secret))
+  write_bytes(dir + "/rsa.pub.asc", @utf8.encode(fx_rsa_public))
+  write_bytes(dir + "/ed.asc", @utf8.encode(fx_ed_secret))
+  let config = dir + "/linuxpkg.json"
+  // The public key for /etc/apk/keys/.
+  assert_eq(
+    run(["key", "apk-pub", dir + "/rsa.asc", "--out", dir + "/keys"]),
+    0,
+  )
+  assert_eq(
+    run([
+      "key",
+      "apk-pub",
+      dir + "/rsa.asc",
+      "--name",
+      "mine",
+      "--out",
+      dir + "/keys",
+    ]),
+    0,
+  )
+  let default_name = "linuxpkg-03d2e4b8fa9ac68f.rsa.pub"
+  assert_true(@fs.path_exists(dir + "/keys/" + default_name))
+  assert_eq(
+    read_bytes(dir + "/keys/mine.rsa.pub"),
+    read_bytes(dir + "/keys/" + default_name),
+  )
+  assert_eq(run(["key", "info", dir + "/rsa.asc"]), 0)
+  assert_eq(run(["key", "info", dir + "/ed.asc"]), 0)
+  // Only RSA keys make Alpine keys; usage errors.
+  assert_eq(run(["key", "apk-pub", dir + "/ed.asc"]), 1)
+  assert_eq(run(["key", "apk-pub"]), 1)
+  assert_eq(run(["key"]), 1)
+  assert_eq(run(["key", "frobnicate", dir + "/rsa.asc"]), 1)
+  assert_eq(run(["key", "info", dir + "/missing.asc"]), 1)
+  // Build and check.
+  assert_eq(
+    run([
+      "build",
+      config,
+      "--format",
+      "apk",
+      "--sign-key",
+      dir + "/rsa.asc",
+      "--out",
+      dir + "/s",
+    ]),
+    0,
+  )
+  let apk = dir + "/s/tinytool-1.0-r1.apk"
+  assert_eq(run(["verify", apk]), 0)
+  assert_eq(run(["verify", apk, "--keyring", dir + "/keys/mine.rsa.pub"]), 0)
+  assert_eq(run(["verify", apk, "--keyring", dir + "/rsa.pub.asc"]), 0)
+  assert_eq(run(["verify", apk, "--keyring", dir + "/rsa.asc"]), 0)
+  let apk_pkg = @apk.read(read_bytes(apk))
+  assert_eq(apk_pkg.signatures, [".SIGN.RSA256." + default_name])
+  // A named key, from the configuration.
+  assert_eq(
+    run([
+      "build",
+      config,
+      "--format",
+      "apk",
+      "--sign-key",
+      dir + "/rsa.asc",
+      "--apk-key-name",
+      "mine.rsa.pub",
+      "--out",
+      dir + "/n",
+    ]),
+    0,
+  )
+  assert_eq(@apk.read(read_bytes(dir + "/n/tinytool-1.0-r1.apk")).signatures, [
+    ".SIGN.RSA256.mine.rsa.pub",
+  ])
+  // A wrong key and an unsigned package fail with exit status 2.
+  assert_eq(run(["verify", apk, "--keyring", dir + "/ed.asc"]), 2)
+  assert_eq(run(["build", config, "--format", "apk", "--out", dir + "/u"]), 0)
+  assert_eq(
+    run([
+      "verify",
+      dir + "/u/tinytool-1.0-r1.apk",
+      "--keyring",
+      dir + "/keys/mine.rsa.pub",
+    ]),
+    2,
+  )
+  assert_eq(run(["verify", dir + "/u/tinytool-1.0-r1.apk"]), 0)
+  // An Ed25519 key cannot sign apk packages: an error for --format apk, a note for all.
+  assert_eq(
+    run([
+      "build",
+      config,
+      "--format",
+      "apk",
+      "--sign-key",
+      dir + "/ed.asc",
+      "--out",
+      dir + "/e",
+    ]),
+    1,
+  )
+  assert_eq(
+    run(["build", config, "--sign-key", dir + "/ed.asc", "--out", dir + "/e"]),
+    0,
+  )
+  assert_eq(@apk.read(read_bytes(dir + "/e/tinytool-1.0-r1.apk")).signatures, [])
+  assert_eq(
+    run([
+      "verify",
+      dir + "/e/tinytool-1.0-1.noarch.rpm",
+      "--keyring",
+      dir + "/rsa.pub.asc",
+    ]),
+    2,
+  )
+  // Bad key names.
+  assert_eq(
+    run([
+      "build",
+      config,
+      "--format",
+      "apk",
+      "--sign-key",
+      dir + "/rsa.asc",
+      "--apk-key-name",
+      "a/b",
+      "--out",
+      dir + "/b",
+    ]),
+    1,
+  )
+  remove_tree(dir)
+}

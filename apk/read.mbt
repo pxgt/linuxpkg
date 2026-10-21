@@ -11,6 +11,10 @@ pub(all) struct ApkPackage {
   data : Array[(@tar.Entry, Array[(String, String)])]
   /// The data segment as stored (gzip), which `datahash` covers.
   data_packed : Bytes
+  /// The control segment as stored (gzip), which the signature covers.
+  control_packed : Bytes
+  /// The signature files: `(name, content, mtime)`.
+  signature_files : Array[(String, Bytes, Int64)]
 } derive(Eq, Debug)
 
 ///|
@@ -82,10 +86,16 @@ pub fn read(
     )
   }
   let signatures : Array[String] = []
+  let signature_files : Array[(String, Bytes, Int64)] = []
   let mut next = 0
   if members.length() == 3 {
     for item in parse_tar("signature", members[0].1) {
-      signatures.push(clean_path(item.0.path))
+      let name = clean_path(item.0.path)
+      signatures.push(name)
+      match item.0.kind {
+        File(content) => signature_files.push((name, content, item.0.mtime))
+        _ => ()
+      }
     }
     next = 1
   }
@@ -119,6 +129,8 @@ pub fn read(
     control_files,
     data: data_entries,
     data_packed: members[next + 1].0,
+    control_packed: members[next].0,
+    signature_files,
   }
 }
 

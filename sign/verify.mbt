@@ -11,6 +11,8 @@ priv struct PublicKey {
 /// Only version 4 RSA and EdDSA keys are kept; other keys in the same file are ignored.
 pub struct PublicKeyring {
   priv keys : Array[PublicKey]
+  /// Plain RSA keys from PEM files (Alpine's `.rsa.pub`), with a label.
+  priv rsa_keys : Array[(String, @pki.RsaPublicKey)]
 }
 
 ///|
@@ -36,10 +38,15 @@ fn usable(packet : @packet.PublicKeyPacket) -> Bool {
 }
 
 ///|
-/// Read public keys from ASCII armor; several armor blocks are allowed.
+/// Read public keys from ASCII armor; several armor blocks are allowed. A PEM
+/// `PUBLIC KEY` block (an Alpine `.rsa.pub` file) is read as well.
 pub fn PublicKeyring::from_armored(
   text : String,
 ) -> PublicKeyring raise SignError {
+  if text.contains("-----BEGIN PUBLIC KEY-----") ||
+    text.contains("-----BEGIN RSA PUBLIC KEY-----") {
+    return PublicKeyring::from_pem(text)
+  }
   let blocks = @armor.decode_all(text) catch {
     e => raise Key(message="armor: \{describe(e)}")
   }
@@ -53,7 +60,7 @@ pub fn PublicKeyring::from_armored(
   if all.is_empty() {
     raise Key(message="no public key found")
   }
-  { keys: all, }
+  { keys: all, rsa_keys: [], }
 }
 
 ///|
@@ -91,7 +98,7 @@ pub fn PublicKeyring::from_bytes(data : Bytes) -> PublicKeyring raise SignError 
   if keys.is_empty() {
     raise Key(message="no usable public key (version 4 RSA or EdDSA) found")
   }
-  { keys, }
+  { keys, rsa_keys: [], }
 }
 
 ///|
@@ -394,3 +401,176 @@ pub fn signature_info(signature : Bytes) -> SignatureInfo raise SignError {
   }
   { key_id: hex_upper(key_id), created, }
 }
+
+///|
+/// A tiny reader for the DER of an RSA public key.
+priv struct Der {
+  data : Bytes
+  mut pos : Int32
+}
+
+///|
+fn Der::next(self : Der) -> (Int32, Bytes) raise SignError {
+  let bad = SignError::Key(message="damaged RSA public key (DER)")
+  if self.pos + 2 > self.data.length() {
+    raise bad
+  }
+  let tag = self.data[self.pos].to_int()
+  let first = self.data[self.pos + 1].to_int()
+  self.pos += 2
+  let mut length = first
+  if first >= 128 {
+    let count = first - 128
+    if count == 0 || count > 3 || self.pos + count > self.data.length() {
+      raise bad
+    }
+    length = 0
+    for _ in 0..<count {
+      length = length * 256 + self.data[self.pos].to_int()
+      self.pos += 1
+    }
+  }
+  if length < 0 || self.pos + length > self.data.length() {
+    raise bad
+  }
+  let content = self.data[self.pos:self.pos + length].to_owned()
+  self.pos += length
+  (tag, content)
+}
+
+///|
+fn rsa_from_pkcs1(der : Bytes) -> @pki.RsaPublicKey raise SignError {
+  let seq = Der::{ data: der, pos: 0, }
+  let (tag, body) = seq.next()
+  guard tag == 0x30 else { raise Key(message="not an RSA public key") }
+  let items = Der::{ data: body, pos: 0, }
+  let (t1, n) = items.next()
+  let (t2, e) = items.next()
+  guard t1 == 0x02 && t2 == 0x02 else {
+    raise Key(message="not an RSA public key")
+  }
+  { n: big(n), e: big(e), }
+}
+
+///|
+fn rsa_from_spki(der : Bytes) -> @pki.RsaPublicKey raise SignError {
+  let seq = Der::{ data: der, pos: 0, }
+  let (tag, body) = seq.next()
+  guard tag == 0x30 else { raise Key(message="not a public key") }
+  let items = Der::{ data: body, pos: 0, }
+  let (t1, algorithm) = items.next()
+  let (t2, bits) = items.next()
+  guard t1 == 0x30 && t2 == 0x03 && bits.length() > 1 else {
+    raise Key(message="not a public key")
+  }
+  // OID rsaEncryption (1.2.840.113549.1.1.1) first, then NULL.
+  guard algorithm.length() >= 11 &&
+    algorithm[0:11].to_owned() ==
+    b"\x06\x09\x2a\x86\x48\x86\xf7\x0d\x01\x01\x01" else {
+    raise Key(message="only RSA public keys are supported")
+  }
+  rsa_from_pkcs1(bits[1:].to_owned())
+}
+
+///|
+/// Read RSA public keys from PEM text: `PUBLIC KEY` blocks (what
+/// `openssl rsa -pubout` and Alpine's `.rsa.pub` files hold) and
+/// `RSA PUBLIC KEY` blocks. Such a keyring checks plain RSA signatures
+/// (`verify_rsa`), not OpenPGP ones.
+pub fn PublicKeyring::from_pem(text : String) -> PublicKeyring raise SignError {
+  let rsa_keys : Array[(String, @pki.RsaPublicKey)] = []
+  let lines = text
+    .split("\n")
+    .map(l => strip_trailing_space(l.to_owned()))
+    .collect()
+  let mut i = 0
+  while i < lines.length() {
+    let kind = if lines[i] == "-----BEGIN PUBLIC KEY-----" {
+      1
+    } else if lines[i] == "-----BEGIN RSA PUBLIC KEY-----" {
+      2
+    } else {
+      0
+    }
+    i += 1
+    if kind == 0 {
+      continue
+    }
+    let end = if kind == 1 {
+      "-----END PUBLIC KEY-----"
+    } else {
+      "-----END RSA PUBLIC KEY-----"
+    }
+    let b64 = StringBuilder()
+    while i < lines.length() && lines[i] != end {
+      b64.write_string(lines[i])
+      i += 1
+    }
+    guard i < lines.length() else {
+      raise Key(message="the PEM block is not closed")
+    }
+    let der = @base64.decode(b64.to_string()) catch {
+      _ => raise Key(message="the PEM block is not valid base64")
+    }
+    let key = if kind == 1 { rsa_from_spki(der) } else { rsa_from_pkcs1(der) }
+    let label = "RSA:" +
+      hex_upper(Bytes::from_iter(@crypto.sha256(der).iter()))[0:16].to_owned()
+    rsa_keys.push((label, key))
+  }
+  if rsa_keys.is_empty() {
+    raise Key(message="no RSA public key found")
+  }
+  { keys: [], rsa_keys, }
+}
+
+///|
+/// Check a plain RSA signature (PKCS#1 v1.5 over the `hash` of `data`, as
+/// Alpine's tools make them) against the RSA keys of the keyring: PEM keys
+/// and OpenPGP RSA keys. Returns the fingerprint of the key that made it
+/// (`RSA:` and 16 digits for a PEM key).
+pub fn PublicKeyring::verify_rsa(
+  self : PublicKeyring,
+  hash : RsaHash,
+  data : BytesView,
+  signature : BytesView,
+) -> String raise SignError {
+  let digest = hash.id().digest(data)
+  for entry in self.rsa_keys {
+    let ok = entry.1.pkcs1_v15_verify(hash.id(), digest[:], signature) catch {
+      _ => false
+    }
+    if ok {
+      return entry.0
+    }
+  }
+  for key in self.keys {
+    let params = key.packet.params()
+    if key.packet.algo().is_rsa() && params.length() == 2 {
+      let rsa = @pki.RsaPublicKey::{ n: big(params[0]), e: big(params[1]), }
+      let ok = rsa.pkcs1_v15_verify(hash.id(), digest[:], signature) catch {
+        _ => false
+      }
+      if ok {
+        return hex_upper(key.fingerprint)
+      }
+    }
+  }
+  raise BadSignature(message="no key of the keyring made this signature")
+}
+
+///|
+/// What a signed file says about its signature, as `rpm.RpmPackage::signature_status` and
+/// `apk.ApkPackage::signature_status` report it.
+///
+/// - `Unsigned`: there is no signature.
+/// - `Signed`: signed by this key id (16 hexadecimal digits); not checked,
+///   because no keyring was given.
+/// - `Good`: the signature checks out against a key of the keyring.
+/// - `Bad`: the signature is damaged, does not match the main header, or was
+///   made by a key that is not in the keyring; the text says which.
+pub(all) enum SignatureStatus {
+  Unsigned
+  Signed(key_id~ : String)
+  Good(Verified)
+  Bad(String)
+} derive(Eq, Debug)

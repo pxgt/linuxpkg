@@ -78,6 +78,9 @@ pub(all) struct Config {
   /// Path of an OpenPGP private key (relative to the configuration file) to
   /// sign rpm and Arch Linux packages with; `build --sign-key` overrides it.
   sign_key : String?
+  /// File name of the Alpine public key (`mykey.rsa.pub`) written into the
+  /// signature of apk packages; `linuxpkg-<key id>.rsa.pub` when unset.
+  apk_key_name : String?
 } derive(Eq, Debug)
 
 ///|
@@ -115,7 +118,7 @@ let top_level_keys : Array[String] = [
   "$schema", "name", "version", "release", "epoch", "arch", "maintainer", "description",
   "homepage", "license", "vendor", "section", "priority", "depends", "recommends",
   "suggests", "conflicts", "replaces", "provides", "mtime", "contents", "scripts",
-  "compression", "deb", "rpm", "pacman", "sign_key",
+  "compression", "deb", "rpm", "pacman", "sign_key", "apk_key_name",
 ]
 
 ///|
@@ -487,5 +490,6 @@ pub fn Config::parse(text : String) -> Config raise SpecError {
     rpm: parse_format_options(map.get("rpm"), "rpm"),
     pacman: parse_format_options(map.get("pacman"), "pacman"),
     sign_key: opt_string(map, "sign_key", "sign_key"),
+    apk_key_name: opt_string(map, "apk_key_name", "apk_key_name"),
   }
 }

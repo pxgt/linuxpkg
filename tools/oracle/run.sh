@@ -753,7 +753,7 @@ if command -v gpgv >/dev/null 2>&1 && command -v gpg >/dev/null 2>&1; then
       python3 - "$RPMPKG" "$P/changed.rpm" <<'PY'
 import sys
 data = bytearray(open(sys.argv[1], "rb").read())
-at = data.index(b"hello ", 96)  # the package name, in the main header
+at = data.index(b"hello\x00", 96)  # the package name, in the main header
 data[at] ^= 1
 open(sys.argv[2], "wb").write(data)
 PY
@@ -903,6 +903,88 @@ if [ -n "$APK_TOOL" ] && [ -x "$APK_TOOL" ]; then
   AUDIT="$("$APK_TOOL" --root "$AROOT" audit --full 2>&1 | grep -v '^D lib/' || true)"
   [ -z "$AUDIT" ] || { echo "$AUDIT"; die "apk audit found differences"; }
   pass "apk add installs the package and apk audit finds no differences"
+  # ---- signed packages: trusted through the key directory, no --allow-untrusted
+  KEYSD="$WORK/apk-keys"
+  SAPK="$WORK/apk-signed"
+  mkdir -p "$KEYSD" "$SAPK" "$WORK/apk-nokeys"
+  SECRET="$ROOT/testdata/sign/test-only-rsa2048.sec.asc"
+  "$BIN" key apk-pub "$SECRET" --name test --out "$KEYSD" >/dev/null
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rsa -pubin -in "$KEYSD/test.rsa.pub" -noout 2>/dev/null && pass "openssl reads the exported Alpine key"
+  fi
+  "$BIN" build "$EXAMPLE" --format apk --out "$SAPK" --sign-key "$SECRET" --apk-key-name test.rsa.pub >/dev/null
+  SIGNED="$SAPK/hello-1.0.0-r1.apk"
+  SROOT="$WORK/apk-signed-root"
+  mkdir -p "$SROOT"
+  "$APK_TOOL" --keys-dir "$KEYSD" --root "$SROOT" --initdb --no-network --no-cache --no-scripts add "$SIGNED" >"$WORK/apk-add.txt" 2>&1 || { cat "$WORK/apk-add.txt"; die "apk add refused the signed package"; }
+  expect_eq "apk installed the signed package without --allow-untrusted" "$("$SROOT/usr/bin/hello")" "hello from linuxpkg"
+  if "$APK_TOOL" --keys-dir "$WORK/apk-nokeys" --root "$WORK/apk-r2" --initdb --no-network --no-cache --no-scripts add "$SIGNED" >"$WORK/apk-add.txt" 2>&1; then
+    cat "$WORK/apk-add.txt"; die "apk installed a signed package without the key"
+  fi
+  expect_in "apk calls it untrusted without the key" "UNTRUSTED signature" "$(cat "$WORK/apk-add.txt")"
+  # Another key under the same name: the signature does not match.
+  if command -v openssl >/dev/null 2>&1; then
+    mkdir -p "$WORK/apk-otherkeys"
+    openssl genrsa -out "$WORK/other.rsa" 2048 2>/dev/null
+    openssl rsa -in "$WORK/other.rsa" -pubout -out "$WORK/apk-otherkeys/test.rsa.pub" 2>/dev/null
+    if "$APK_TOOL" --keys-dir "$WORK/apk-otherkeys" --root "$WORK/apk-r3" --initdb --no-network --no-cache --no-scripts add "$SIGNED" >"$WORK/apk-add.txt" 2>&1; then
+      cat "$WORK/apk-add.txt"; die "apk accepted a signature of another key"
+    fi
+    expect_in "apk refuses another key's signature" "signature" "$(cat "$WORK/apk-add.txt")"
+  fi
+  "$BIN" verify "$SIGNED" --keyring "$KEYSD/test.rsa.pub" | grep -q "signature: OK" && pass "verify --keyring accepts the signed apk with the exported key"
+  if "$BIN" verify "$SIGNED" --keyring "$WORK/apk-otherkeys/test.rsa.pub" >/dev/null 2>&1; then die "verify accepted another key"; fi
+  pass "verify --keyring refuses another key"
+  # openssl checks our signature by itself: it covers the control stream bytes.
+  python3 - "$SIGNED" "$WORK/apk-sig" "$WORK/apk-control.gz" <<'PY'
+import sys, zlib, tarfile, io
+data = open(sys.argv[1], "rb").read()
+members, pos = [], 0
+while pos < len(data):
+    d = zlib.decompressobj(31)
+    out = d.decompress(data[pos:])
+    used = len(data[pos:]) - len(d.unused_data)
+    members.append((data[pos:pos + used], out))
+    pos += used
+assert len(members) == 3, len(members)
+tar = tarfile.open(fileobj=io.BytesIO(members[0][1]))
+names = tar.getnames()
+assert names == [".SIGN.RSA256.test.rsa.pub"], names
+assert members[0][1][-1024:] != b"\0" * 1024, "the signature tar has no end marker"
+open(sys.argv[2], "wb").write(tar.extractfile(names[0]).read())
+open(sys.argv[3], "wb").write(members[1][0])
+PY
+  if command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 -verify "$KEYSD/test.rsa.pub" -signature "$WORK/apk-sig" "$WORK/apk-control.gz" >/dev/null
+    pass "openssl verifies the signature over the control stream"
+    # A package signed the way abuild does it (SHA-1, .SIGN.RSA.): our verify and apk accept it.
+    python3 - "$APKFILE" "$WORK/other.rsa" "$WORK/apk-abuild.apk" <<'PY'
+import sys, zlib, tarfile, io, gzip, subprocess
+data = open(sys.argv[1], "rb").read()
+members, pos = [], 0
+while pos < len(data):
+    d = zlib.decompressobj(31)
+    out = d.decompress(data[pos:])
+    used = len(data[pos:]) - len(d.unused_data)
+    members.append(data[pos:pos + used])
+    pos += used
+control, payload = members
+tmp = sys.argv[3] + ".control.gz"
+open(tmp, "wb").write(control)
+sig = subprocess.run(["openssl", "dgst", "-sha1", "-sign", sys.argv[2], tmp], capture_output=True, check=True).stdout
+buf = io.BytesIO()
+with tarfile.open(fileobj=buf, mode="w", format=tarfile.USTAR_FORMAT) as tar:
+    info = tarfile.TarInfo(".SIGN.RSA.test.rsa.pub")
+    info.size = len(sig)
+    info.mode = 0o644
+    tar.addfile(info, io.BytesIO(sig))
+raw = buf.getvalue()[:1024]  # header and padded data only: no end marker, like abuild-tar --cut
+open(sys.argv[3], "wb").write(gzip.compress(raw, mtime=0) + control + payload)
+PY
+    "$BIN" verify "$WORK/apk-abuild.apk" --keyring "$WORK/apk-otherkeys/test.rsa.pub" | grep -q "signature: OK" && pass "verify --keyring accepts an abuild-style SHA-1 signature"
+    "$APK_TOOL" --keys-dir "$WORK/apk-otherkeys" --root "$WORK/apk-r4" --initdb --no-network --no-cache --no-scripts add "$WORK/apk-abuild.apk" >/dev/null 2>&1
+    pass "apk accepts the same abuild-style package, so both agree on the format"
+  fi
 else
   echo "  apk is not installed, the install check is left to the container job"
 fi

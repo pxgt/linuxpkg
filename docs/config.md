@@ -22,6 +22,8 @@ rejected, and every error names its field (for example `contents[2].dst`). Relat
 | `mtime` | integer | none | Modification time (seconds since the epoch) of the build and of all entries without their own. Falls back to the `SOURCE_DATE_EPOCH` environment variable, then 0. |
 | `compression` | string | `"gzip"` | Compression of the deb members and the rpm payload: `none`, `gzip`, `xz` or `zstd` (`gz` and `zst` are accepted too). See *Compression* below. |
 | `deb`, `rpm`, `pacman` | object | none | Per-format overrides. Only `compression` is allowed, for example `"deb": {"compression": "zstd"}`. `pacman` is the Arch Linux package (`arch` is already the CPU architecture); its default is `zstd`. |
+| `sign_key` | string | none | Path of an OpenPGP private key (relative to the configuration file) that signs rpm, Arch Linux and Alpine packages; `--sign-key` on the command line wins. See [signing.md](signing.md). |
+| `apk_key_name` | string | `linuxpkg-<key id>.rsa.pub` | File name of the public key in Alpine signatures, the name users give it in `/etc/apk/keys/`. |
 | `contents` | object array | `[]` | Files, directories and links, see below. |
 | `scripts` | object | none | `preinstall`, `postinstall`, `preremove`, `postremove`: paths of script files; each must start with `#!` for deb. |
 | `$schema` | string | ignored | For editors. |
@@ -65,14 +67,16 @@ Parent directories: debs and Arch Linux packages list every parent directory aut
 ## Command line
 
 ```
-linuxpkg build <config.json> [--format deb|rpm|arch|apk|all] [--compression none|gzip|xz|zstd] [--out DIR]
+linuxpkg build <config.json> [--format deb|rpm|arch|apk|all] [--compression none|gzip|xz|zstd] [--sign-key KEY] [--apk-key-name N] [--out DIR]
 linuxpkg inspect <file.deb|file.rpm> [--json]
-linuxpkg verify  <file.deb|file.rpm>
-linuxpkg repo   <dir> [--format deb|rpm|all]
+linuxpkg verify  <package|repository dir> [--keyring KEY]
+linuxpkg repo   <dir> [--format deb|rpm|all] [--sign-key KEY]
+linuxpkg key apk-pub|info <private key> [--name NAME] [--out DIR]
 linuxpkg init [PATH] [--force]
 ```
 
 `repo` writes apt and dnf repository metadata for the packages in a directory, see [repository.md](repository.md).
+`--sign-key`, `--keyring` and `key` are explained in [signing.md](signing.md).
 
 Exit status: `0` success; `1` usage error, unreadable file, not a package, or unsupported compression (bzip2);
 `2` `verify` found a damaged or tampered package.

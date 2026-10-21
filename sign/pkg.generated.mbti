@@ -24,12 +24,26 @@ pub struct PublicKeyring {
 pub fn PublicKeyring::fingerprints(Self) -> Array[String]
 pub fn PublicKeyring::from_armored(String) -> Self raise SignError
 pub fn PublicKeyring::from_bytes(Bytes) -> Self raise SignError
+pub fn PublicKeyring::from_pem(String) -> Self raise SignError
 pub fn PublicKeyring::verify_cleartext(Self, String) -> (String, Verified) raise SignError
 pub fn PublicKeyring::verify_detached(Self, BytesView, Bytes) -> Verified raise SignError
+pub fn PublicKeyring::verify_rsa(Self, RsaHash, BytesView, BytesView) -> String raise SignError
+
+pub(all) enum RsaHash {
+  Sha1
+  Sha256
+} derive(Eq, @debug.Debug)
 
 pub(all) struct SignatureInfo {
   key_id : String
   created : Int64
+} derive(Eq, @debug.Debug)
+
+pub(all) enum SignatureStatus {
+  Unsigned
+  Signed(key_id~ : String)
+  Good(Verified)
+  Bad(String)
 } derive(Eq, @debug.Debug)
 
 pub struct SigningKey {
@@ -45,6 +59,8 @@ pub fn SigningKey::from_bytes(Bytes) -> Self raise SignError
 pub fn SigningKey::is_rsa(Self) -> Bool
 pub fn SigningKey::key_id(Self) -> String
 pub fn SigningKey::rsa_bits(Self) -> Int32
+pub fn SigningKey::rsa_public_pem(Self) -> String raise SignError
+pub fn SigningKey::rsa_sign(Self, RsaHash, BytesView) -> Bytes raise SignError
 pub fn SigningKey::signing_time(Self, Int64) -> Int64
 
 pub(all) struct Verified {

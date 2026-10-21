@@ -407,3 +407,117 @@ test "a signature of a 100 KB input with a 3-part hash equals the one-piece hash
   let verified = ring().verify_detached(big[:], signature)
   assert_eq(verified.created, created)
 }
+
+///|
+test "plain RSA signatures: sign, export the PEM key, verify" {
+  let key = rsa_key()
+  let data = b"control stream bytes"
+  for hash in [@sign.RsaHash::Sha1, @sign.RsaHash::Sha256] {
+    let signature = key.rsa_sign(hash, data[:])
+    assert_eq(signature.length(), 256)
+    assert_eq(signature, key.rsa_sign(hash, data[:]))
+    let pem = @sign.PublicKeyring::from_pem(key.rsa_public_pem())
+    let who = pem.verify_rsa(hash, data[:], signature[:])
+    assert_true(who.has_prefix("RSA:"))
+    // The OpenPGP public key verifies it as well, and names its fingerprint.
+    let openpgp = @sign.PublicKeyring::from_armored(fx_rsa_public)
+    assert_eq(
+      openpgp.verify_rsa(hash, data[:], signature[:]),
+      "7D8AA52BF6463DA4C2FA7FD803D2E4B8FA9AC68F",
+    )
+    // Other data, the other hash and the other key do not.
+    assert_true(
+      outcome(() => pem.verify_rsa(hash, b"other"[:], signature[:]))
+      is Err(@sign.BadSignature(..)),
+    )
+    let other_hash = if hash == @sign.RsaHash::Sha1 {
+      @sign.RsaHash::Sha256
+    } else {
+      @sign.RsaHash::Sha1
+    }
+    assert_true(
+      outcome(() => pem.verify_rsa(other_hash, data[:], signature[:])) is Err(_),
+    )
+    assert_true(
+      outcome(() => ring().verify_rsa(hash, b"other"[:], signature[:]))
+      is Err(_),
+    )
+  }
+  // from_armored accepts a PEM block too.
+  let pem_text = key.rsa_public_pem()
+  assert_true(pem_text.has_prefix("-----BEGIN PUBLIC KEY-----\n"))
+  assert_true(pem_text.has_suffix("-----END PUBLIC KEY-----\n"))
+  let same = @sign.PublicKeyring::from_armored(pem_text)
+  assert_true(
+    outcome(() => {
+      same.verify_rsa(Sha256, data[:], key.rsa_sign(Sha256, data[:])[:])
+    })
+    is Ok(_),
+  )
+}
+
+///|
+test "plain RSA signatures need an RSA key" {
+  let ed = ed_key()
+  assert_true(outcome(() => ed.rsa_sign(Sha256, b"x"[:])) is Err(@sign.Key(..)))
+  assert_true(outcome(() => ed.rsa_public_pem()) is Err(@sign.Key(..)))
+}
+
+///|
+test "PEM public keys: damaged and foreign ones are refused" {
+  let good = rsa_key().rsa_public_pem()
+  assert_true(
+    outcome(() => @sign.PublicKeyring::from_pem("")) is Err(@sign.Key(..)),
+  )
+  assert_true(
+    outcome(() => @sign.PublicKeyring::from_pem("-----BEGIN PUBLIC KEY-----\n"))
+    is Err(@sign.Key(..)),
+  )
+  assert_true(
+    outcome(() => {
+      @sign.PublicKeyring::from_pem(
+        "-----BEGIN PUBLIC KEY-----\n!!!!\n-----END PUBLIC KEY-----\n",
+      )
+    })
+    is Err(@sign.Key(..)),
+  )
+  // Cut the key short at every length: an error, never a crash.
+  let lines = good.split("\n").map(l => l.to_owned()).collect()
+  let body = lines[1:lines.length() - 2].join("")
+  for n in 0..<body.length() {
+    if n % 7 == 0 {
+      let text = "-----BEGIN PUBLIC KEY-----\n" +
+        body[0:n].to_owned() +
+        "\n-----END PUBLIC KEY-----\n"
+      assert_true(outcome(() => @sign.PublicKeyring::from_pem(text)) is Err(_))
+    }
+  }
+  // An EC key (id-ecPublicKey) is not an RSA key.
+  let ec = "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEZ3xtSCSyZWGJEwwG5xkPLK5/EeAm\nvOQA3s0S0G6yaS9bPNVcbZ6vDHkE3fX2XGsU4G0e5okRdd7IUWZ0C4O/Pg==\n-----END PUBLIC KEY-----\n"
+  assert_true(
+    outcome(() => @sign.PublicKeyring::from_pem(ec)) is Err(@sign.Key(..)),
+  )
+}
+
+///|
+test "golden: PEM key and RSA signatures are the same on every backend" {
+  let key = rsa_key()
+  let pem = key.rsa_public_pem()
+  assert_eq(
+    hex_of_sha256(@utf8.encode(pem)),
+    "50d0cdf7d13f015f9ef2cbade7654226e13c351878be95f7f3b075c39b5db765",
+  )
+  assert_eq(
+    hex_of_sha256(key.rsa_sign(Sha256, b"control stream bytes"[:])),
+    "950c18ca680dae06a857f574144220dd382a2435ad62d286d8da8d1686e9b41d",
+  )
+  assert_eq(
+    hex_of_sha256(key.rsa_sign(Sha1, b"control stream bytes"[:])),
+    "8b4bc3d2fb533722a576cb90b7a42625e2b5a1805077c2785cf667ec0a7e7813",
+  )
+}
+
+///|
+fn hex_of_sha256(bytes : Bytes) -> String {
+  to_hex(Bytes::from_iter(@crypto.sha256(bytes).iter()))
+}

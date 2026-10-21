@@ -55,7 +55,25 @@ fn check_signature(
         }
       }
     }
-    Deb(_) | Apk(_) =>
+    Apk(apk) =>
+      match apk.signature_status(keyring) {
+        Unsigned =>
+          if keyring is Some(_) {
+            return ["not signed"]
+          } else {
+            println("\{path}: signature: none")
+          }
+        Signed(key_id~) =>
+          println(
+            "\{path}: signature: signed by key \{key_id} (not checked, no --keyring)",
+          )
+        Good(verified) =>
+          println(
+            "\{path}: signature: OK (key \{verified.key_id}, \{verified.fingerprint})",
+          )
+        Bad(message) => return [message]
+      }
+    Deb(_) =>
       if keyring is Some(_) {
         raise Failed(
           "\{path}: this kind of package is not signed by itself; check the signature of the repository (`verify <directory> --keyring KEY`)",

@@ -73,6 +73,7 @@ pub(all) struct Config {
   rpm : FormatOptions
   pacman : FormatOptions
   sign_key : String?
+  apk_key_name : String?
 } derive(Eq, @debug.Debug)
 pub fn Config::arch_compression(Self) -> @compress.Compression
 pub fn Config::deb_compression(Self) -> @compress.Compression
