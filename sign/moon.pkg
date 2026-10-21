@@ -1,0 +1,9 @@
+import {
+  "justinwongcn/moonpgp/packet",
+  "justinwongcn/moonpgp/pki",
+  "justinwongcn/moonpgp/armor",
+  "justinwongcn/moonpgp/primitives",
+  "moonbitlang/x/crypto",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/encoding/base64",
+}

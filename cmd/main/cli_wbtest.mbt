@@ -377,3 +377,67 @@ test "apk builds, inspects and verifies an Alpine Linux package" {
   }
   @fs.remove_dir(dir)
 }
+
+///|
+test "repo --sign-key writes signatures that verify, and bad keys stop the command" {
+  let dir = "cli_signrepo_tmp"
+  ensure_dir(dir)
+  write_bytes(dir + "/linuxpkg.json", @utf8.encode(CONFIG_JSON))
+  write_bytes(dir + "/tool.sh", b"#!/bin/sh\necho hi\n")
+  write_bytes(dir + "/key.asc", @utf8.encode(fx_ed_secret))
+  write_bytes(dir + "/key.pub.asc", @utf8.encode(fx_ed_public))
+  let repo = dir + "/repo"
+  assert_eq(run(["build", dir + "/linuxpkg.json", "--out", repo]), 0)
+  assert_eq(run(["repo", repo, "--sign-key", dir + "/key.asc"]), 0)
+  let ring = load_keyring(dir + "/key.pub.asc")
+  let release = read_bytes(repo + "/Release")
+  assert_eq(
+    ring.verify_detached(release[:], read_bytes(repo + "/Release.gpg")).fingerprint,
+    "66A22F1760CE2ABB10060451E2F97F5A50BD0EB3",
+  )
+  let (text, _) = ring.verify_cleartext(
+    @utf8.decode(read_bytes(repo + "/InRelease")),
+  )
+  assert_eq(@utf8.encode(text), release)
+  let repomd = read_bytes(repo + "/repodata/repomd.xml")
+  assert_true(
+    ring.verify_detached(
+      repomd[:],
+      read_bytes(repo + "/repodata/repomd.xml.asc"),
+    ).created >
+    0L,
+  )
+  // A second run gives the same files, signatures included.
+  let before = (
+    read_bytes(repo + "/InRelease"),
+    read_bytes(repo + "/Release.gpg"),
+  )
+  assert_eq(run(["repo", repo, "--sign-key", dir + "/key.asc"]), 0)
+  assert_eq(read_bytes(repo + "/InRelease"), before.0)
+  assert_eq(read_bytes(repo + "/Release.gpg"), before.1)
+  // A binary key file works too.
+  let binary = @armor.decode(fx_ed_secret).data()
+  write_bytes(dir + "/key.gpg", binary)
+  assert_eq(run(["repo", repo, "--sign-key", dir + "/key.gpg"]), 0)
+  // A missing, empty or wrong key stops the command.
+  assert_eq(run(["repo", repo, "--sign-key", dir + "/missing.asc"]), 1)
+  write_bytes(dir + "/empty.asc", b"")
+  assert_eq(run(["repo", repo, "--sign-key", dir + "/empty.asc"]), 1)
+  assert_eq(run(["repo", repo, "--sign-key", dir + "/key.pub.asc"]), 1)
+  assert_eq(run(["repo", repo, "--sign-key"]), 1)
+  for name in @fs.read_dir(repo + "/repodata") {
+    @fs.remove_file(repo + "/repodata/" + name)
+  }
+  @fs.remove_dir(repo + "/repodata")
+  for name in @fs.read_dir(repo) {
+    @fs.remove_file(repo + "/" + name)
+  }
+  @fs.remove_dir(repo)
+  for
+    name in [
+      "linuxpkg.json", "tool.sh", "key.asc", "key.pub.asc", "key.gpg", "empty.asc",
+    ] {
+    @fs.remove_file(dir + "/" + name)
+  }
+  @fs.remove_dir(dir)
+}

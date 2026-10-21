@@ -6,6 +6,16 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `sign` package: OpenPGP signing and verification without gpg. `SigningKey` reads an unprotected version 4 RSA or
+  Ed25519 private key (armored or binary) and writes binary or armored detached signatures and cleartext-signed
+  messages; `PublicKeyring` checks them. The signature time is a parameter, so RSA and Ed25519 signatures are
+  reproducible: the same input gives the same bytes on every backend. Built on the low-level packages of
+  `justinwongcn/moonpgp`.
+- `linuxpkg repo <dir> --sign-key KEY` writes `InRelease` and `Release.gpg` (apt) and `repodata/repomd.xml.asc`
+  (dnf); library: `repo.sign_apt`, `repo.sign_yum`, `repo.check_apt_signature`, `repo.check_yum_signature`.
+
 ## [0.3.1] - 2026-10-20
 
 ### Changed

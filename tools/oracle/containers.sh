@@ -279,6 +279,83 @@ REPO
   '
 }
 
+# ---- signed repositories: no [trusted=yes], the package manager checks the signature
+step "building signed repositories (test-only RSA and Ed25519 keys)"
+for k in rsa2048 ed25519; do
+  mkdir -p "$WORK/signed-deb-$k" "$WORK/signed-rpm-$k"
+  cp "$WORK"/repo-deb/*.deb "$WORK/signed-deb-$k/"
+  cp "$WORK"/repo-rpm/*.rpm "$WORK/signed-rpm-$k/"
+  "$BIN" repo "$WORK/signed-deb-$k" --format deb --sign-key "testdata/sign/test-only-$k.sec.asc"
+  "$BIN" repo "$WORK/signed-rpm-$k" --format rpm --sign-key "testdata/sign/test-only-$k.sec.asc"
+  mkdir -p "$WORK/keys-$k"
+  cp "testdata/sign/test-only-$k.pub.asc" "$WORK/keys-$k/key.asc"
+done
+chmod -R a+rX "$WORK"/signed-deb-* "$WORK"/signed-rpm-* "$WORK"/keys-*
+
+signed_deb() { # image key
+  local image="$1" key="$2"
+  step "$image: apt with signed-by accepts the $key repository and refuses a changed one"
+  docker run --rm -v "$WORK/signed-deb-$key:/repo:ro" -v "$WORK/keys-$key:/keys:ro" "$image" bash -ec '
+    mkdir -p /etc/apt/keyrings
+    cp /keys/key.asc /etc/apt/keyrings/linuxpkg.asc
+    echo "deb [signed-by=/etc/apt/keyrings/linuxpkg.asc] file:/repo ./" > /etc/apt/linuxpkg.list
+    O="-o Dir::Etc::sourcelist=/etc/apt/linuxpkg.list -o Dir::Etc::sourceparts=/dev/null"
+    apt-get $O update
+    apt-get $O install -y linuxpkg-demo
+    test "$(hello)" = "hello from linuxpkg"
+    test "$(linuxpkg-demo)" = "demo from linuxpkg"
+    apt-get $O remove -y linuxpkg-demo hello
+    # A repository whose Release was changed after signing must be refused.
+    cp -r /repo /tmp/bad
+    sed -i "s/^Date: .*/Date: Tue, 14 Nov 2023 22:13:21 +0000/" /tmp/bad/Release /tmp/bad/InRelease
+    echo "deb [signed-by=/etc/apt/keyrings/linuxpkg.asc] file:/tmp/bad ./" > /etc/apt/linuxpkg-bad.list
+    rm -rf /var/lib/apt/lists/*
+    if apt-get -o Dir::Etc::sourcelist=/etc/apt/linuxpkg-bad.list -o Dir::Etc::sourceparts=/dev/null update 2>&1 | tee /tmp/bad.txt; then
+      if ! grep -q "^E:" /tmp/bad.txt; then echo "apt accepted a changed repository"; exit 1; fi
+    fi
+    grep -E "not signed|BADSIG|invalid" /tmp/bad.txt
+    # Without the key apt refuses the genuine repository too.
+    echo "deb file:/repo ./" > /etc/apt/linuxpkg-nokey.list
+    rm -rf /var/lib/apt/lists/*
+    apt-get -o Dir::Etc::sourcelist=/etc/apt/linuxpkg-nokey.list -o Dir::Etc::sourceparts=/dev/null update 2>&1 | tee /tmp/nokey.txt || true
+    grep -E "NO_PUBKEY|not signed" /tmp/nokey.txt
+    echo "signed apt repository check passed on $(. /etc/os-release && echo "$PRETTY_NAME")"
+  '
+}
+
+signed_rpm() { # image key
+  local image="$1" key="$2"
+  step "$image: dnf with repo_gpgcheck=1 accepts the $key repository and refuses a changed one"
+  docker run --rm -v "$WORK/signed-rpm-$key:/repo:ro" -v "$WORK/keys-$key:/keys:ro" "$image" bash -ec '
+    cat > /etc/yum.repos.d/linuxpkg.repo <<REPO
+[linuxpkg]
+name=linuxpkg
+baseurl=file:///repo
+enabled=1
+gpgcheck=0
+repo_gpgcheck=1
+gpgkey=file:///keys/key.asc
+REPO
+    dnf -y --disablerepo="*" --enablerepo=linuxpkg makecache
+    dnf -y --disablerepo="*" --enablerepo=linuxpkg install linuxpkg-demo
+    test "$(hello)" = "hello from linuxpkg"
+    test "$(linuxpkg-demo)" = "demo from linuxpkg"
+    dnf remove -y linuxpkg-demo hello
+    # repomd.xml changed after signing: dnf must refuse it.
+    cp -r /repo /tmp/bad
+    printf " " >> /tmp/bad/repodata/repomd.xml
+    sed -i "s#file:///repo#file:///tmp/bad#" /etc/yum.repos.d/linuxpkg.repo
+    dnf clean all
+    if dnf -y --disablerepo="*" --enablerepo=linuxpkg install linuxpkg-demo >/tmp/bad.txt 2>&1; then
+      cat /tmp/bad.txt; echo "dnf installed from a changed repository"; exit 1
+    fi
+    cat /tmp/bad.txt
+    grep -iE "GPG signature verification error" /tmp/bad.txt
+    test ! -e /usr/bin/linuxpkg-demo
+    echo "signed dnf repository check passed on $(. /etc/os-release && echo "$PRETTY_NAME")"
+  '
+}
+
 # ---- Arch Linux: pacman installs the packages, makepkg and the mirrors give references
 arch_check() {
   step "archlinux:latest: pacman -U, -Qkk, -R for ${COMPRESSIONS}"
@@ -459,6 +536,10 @@ apk_real
 repo_deb debian:12
 repo_deb ubuntu:24.04
 repo_rpm fedora:41
+signed_deb debian:12 rsa2048
+signed_deb ubuntu:24.04 ed25519
+signed_rpm fedora:41 rsa2048
+signed_rpm fedora:41 ed25519
 
 real_deb debian:12 xz
 real_deb ubuntu:24.04 zstd
@@ -468,11 +549,13 @@ OPENEULER="openeuler/openeuler:24.03-lts"
 if docker pull "$OPENEULER" >/dev/null 2>&1; then
   run_rpm "$OPENEULER"
   repo_rpm "$OPENEULER"
+  signed_rpm "$OPENEULER" rsa2048
   real_rpm "$OPENEULER" tree "https://repo.openeuler.org/openEuler-24.03-LTS/everything/x86_64/Packages/tree-2.1.1-1.oe2403.x86_64.rpm"
 else
   echo "NOTE: $OPENEULER could not be pulled, using rockylinux:9 as the RPM-family substitute"
   run_rpm rockylinux:9
   repo_rpm rockylinux:9
+  signed_rpm rockylinux:9 rsa2048
   real_rpm rockylinux:9 tree
 fi
 

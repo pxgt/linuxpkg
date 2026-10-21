@@ -57,7 +57,7 @@ fn write_index(
 fn cmd_repo(args : Array[String]) -> Int32 raise CliError {
   let options = parse_options(
     args,
-    { "--format": "format", "-f": "format" },
+    { "--format": "format", "-f": "format", "--sign-key": "sign_key" },
     Map([]),
   )
   let dir = match options.positional {
@@ -74,6 +74,10 @@ fn cmd_repo(args : Array[String]) -> Int32 raise CliError {
   }
   if !@fs.path_exists(dir) {
     raise Failed("\"\{dir}\" does not exist")
+  }
+  let signer = match options.value("sign_key") {
+    Some(path) => Some((load_signing_key(path), load_keyring(path)))
+    None => None
   }
   let debs = if format == "rpm" { [] } else { package_files(dir, ".deb") }
   let rpms = if format == "deb" { [] } else { package_files(dir, ".rpm") }
@@ -110,9 +114,29 @@ fn cmd_repo(args : Array[String]) -> Int32 raise CliError {
     if problems.length() > 0 {
       raise Failed("the apt index is inconsistent: \{problems.join("; ")}")
     }
-    println(
-      "apt: \{debs.length()} package(s); use `deb [trusted=yes] file:<dir> ./`",
-    )
+    match signer {
+      None =>
+        println(
+          "apt: \{debs.length()} package(s); use `deb [trusted=yes] file:<dir> ./`",
+        )
+      Some((key, ring)) => {
+        let signed = @repo.sign_apt(
+          files,
+          key,
+          created=signature_time(key, stamp),
+        ) catch {
+          err => raise Failed("\{err}")
+        }
+        write_index(dir, signed)
+        let bad = @repo.check_apt_signature(files + signed, ring)
+        if bad.length() > 0 {
+          raise Failed("the apt signatures do not verify: \{bad.join("; ")}")
+        }
+        println(
+          "apt: \{debs.length()} package(s) signed by \{key.fingerprint()}; use `deb [signed-by=<public key file>] file:<dir> ./`",
+        )
+      }
+    }
   }
   if rpms.length() > 0 {
     let files = @repo.yum_index(rpms, timestamp=stamp) catch {
@@ -126,9 +150,29 @@ fn cmd_repo(args : Array[String]) -> Int32 raise CliError {
     if problems.length() > 0 {
       raise Failed("the yum index is inconsistent: \{problems.join("; ")}")
     }
-    println(
-      "yum: \{rpms.length()} package(s); use a .repo file with baseurl=file://<dir> and gpgcheck=0",
-    )
+    match signer {
+      None =>
+        println(
+          "yum: \{rpms.length()} package(s); use a .repo file with baseurl=file://<dir> and gpgcheck=0",
+        )
+      Some((key, ring)) => {
+        let signed = @repo.sign_yum(
+          files,
+          key,
+          created=signature_time(key, stamp),
+        ) catch {
+          err => raise Failed("\{err}")
+        }
+        write_index(dir, signed)
+        let bad = @repo.check_yum_signature(files + signed, ring)
+        if bad.length() > 0 {
+          raise Failed("the yum signature does not verify: \{bad.join("; ")}")
+        }
+        println(
+          "yum: \{rpms.length()} package(s) signed by \{key.fingerprint()}; use a .repo file with repo_gpgcheck=1 and gpgkey=<public key file>",
+        )
+      }
+    }
   }
   0
 }
