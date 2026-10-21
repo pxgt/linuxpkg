@@ -1,0 +1,3 @@
+linuxpkg signing test data
+second line  
+- starts with a dash

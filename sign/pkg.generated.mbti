@@ -1,0 +1,51 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Xpeng/linuxpkg/sign"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub(all) suberror SignError {
+  Key(message~ : String)
+  Locked
+  Invalid(message~ : String)
+  BadSignature(message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for SignError
+
+// Types and methods
+pub struct PublicKeyring {
+  // private fields
+}
+pub fn PublicKeyring::fingerprints(Self) -> Array[String]
+pub fn PublicKeyring::from_armored(String) -> Self raise SignError
+pub fn PublicKeyring::from_bytes(Bytes) -> Self raise SignError
+pub fn PublicKeyring::verify_cleartext(Self, String) -> (String, Verified) raise SignError
+pub fn PublicKeyring::verify_detached(Self, BytesView, Bytes) -> Verified raise SignError
+
+pub struct SigningKey {
+  // private fields
+}
+pub fn SigningKey::cleartext(Self, String, created~ : Int64) -> String raise SignError
+pub fn SigningKey::created(Self) -> Int64
+pub fn SigningKey::detached(Self, BytesView, created~ : Int64) -> Bytes raise SignError
+pub fn SigningKey::detached_armored(Self, BytesView, created~ : Int64) -> String raise SignError
+pub fn SigningKey::fingerprint(Self) -> String
+pub fn SigningKey::from_armored(String) -> Self raise SignError
+pub fn SigningKey::from_bytes(Bytes) -> Self raise SignError
+pub fn SigningKey::is_rsa(Self) -> Bool
+pub fn SigningKey::key_id(Self) -> String
+pub fn SigningKey::rsa_bits(Self) -> Int32
+
+pub(all) struct Verified {
+  fingerprint : String
+  key_id : String
+  created : Int64
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
