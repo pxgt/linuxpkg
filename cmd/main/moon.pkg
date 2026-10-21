@@ -7,10 +7,15 @@ import {
   "Xpeng/linuxpkg/arch",
   "Xpeng/linuxpkg/apk",
   "Xpeng/linuxpkg/repo",
+  "Xpeng/linuxpkg/sign",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/env",
   "moonbitlang/x/fs",
   "moonbitlang/x/sys",
 }
+
+import {
+  "justinwongcn/moonpgp/armor",
+} for "wbtest"
 
 pkgtype(kind: "executable")

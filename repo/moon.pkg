@@ -2,6 +2,7 @@ import {
   "Xpeng/linuxpkg/compress",
   "Xpeng/linuxpkg/deb",
   "Xpeng/linuxpkg/rpm",
+  "Xpeng/linuxpkg/sign",
   "moonbitlang/x/crypto",
   "moonbitlang/core/encoding/utf8",
 }

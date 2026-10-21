@@ -17,7 +17,7 @@ const USAGE : String =
   #|  linuxpkg build <config.json> [--format deb|rpm|arch|apk|all] [--compression C] [--out DIR]
   #|  linuxpkg inspect <package> [--json]      (.deb, .rpm, .apk or .pkg.tar.*)
   #|  linuxpkg verify <package>
-  #|  linuxpkg repo <dir> [--format deb|rpm|all]
+  #|  linuxpkg repo <dir> [--format deb|rpm|all] [--sign-key KEY]
   #|  linuxpkg init [PATH] [--force]
   #|  linuxpkg --version
   #|
@@ -34,6 +34,8 @@ const USAGE : String =
   #|  -z, --compression C  Payload compression: none, gzip, xz or zstd. Overrides
   #|                       the configuration (default: gzip).
   #|  -o, --out DIR        Directory for the packages (default: current directory).
+  #|      --sign-key KEY    Sign the repository with this OpenPGP private key (repo): ASCII
+  #|                       armor or binary, RSA or Ed25519, no passphrase.
   #|      --json           Print machine readable JSON (inspect).
   #|      --force          Overwrite an existing file (init).
   #|  -h, --help           Show this help.
