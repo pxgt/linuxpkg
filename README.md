@@ -17,9 +17,9 @@ containers in CI.
 linuxpkg 是一个**纯 MoonBit** 实现的 Linux 软件包构建与检查工具，包括一个库和一个命令行程序。
 同类工具有 Go 的 [nFPM](https://github.com/goreleaser/nfpm)、Ruby 的 fpm、Rust 的 cargo-deb。
 
-- 用一份 `linuxpkg.json`，把任意程序和文件打成 Debian / Ubuntu / 统信 UOS / 麒麟用的 `.deb`
-  以及 Fedora / openEuler / 龙蜥用的 `.rpm`。
-- 能读取、检查、校验已有的 `.deb` 和 `.rpm`（包括官方工具生成的包）。
+- 用一份 `linuxpkg.json`，把任意程序和文件打成 Debian / Ubuntu / 统信 UOS / 麒麟用的 `.deb`、
+  Fedora / openEuler / 龙蜥用的 `.rpm`、Arch Linux 用的 `.pkg.tar.zst` 和 Alpine 用的 `.apk`。
+- 能读取、检查、校验已有的四种包（包括官方工具和发行版生成的包），并为一批包生成 apt / dnf 软件源索引。
 - **不依赖** `dpkg-deb`、`rpmbuild` 等系统工具，所以在 Windows、macOS 上也能产出 Linux 包。
 - **可复现构建**：同样的输入逐字节产出同样的包（支持 `SOURCE_DATE_EPOCH`）。
 - 核心库不碰文件系统，可在 wasm / wasm-gc / js / native 四个后端运行；只有命令行读写文件。
@@ -53,6 +53,7 @@ moon add Xpeng/linuxpkg
 ```
 
 然后在 `moon.pkg` 里按需导入子包：`Xpeng/linuxpkg/spec`（包模型与配置）、`Xpeng/linuxpkg/deb`、`Xpeng/linuxpkg/rpm`、
+`Xpeng/linuxpkg/arch`（Arch Linux 包）、`Xpeng/linuxpkg/apk`（Alpine 包）、`Xpeng/linuxpkg/repo`（apt / dnf 软件源索引）、
 `Xpeng/linuxpkg/archive/tar`、`Xpeng/linuxpkg/archive/ar`、`Xpeng/linuxpkg/archive/cpio`、`Xpeng/linuxpkg/compress`（压缩与有界解压）。
 核心库不碰文件系统，可在所有后端运行。
 
