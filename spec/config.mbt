@@ -75,6 +75,9 @@ pub(all) struct Config {
   /// Settings of the Arch Linux package (`"pacman"` in the file; `"arch"` is
   /// the CPU architecture).
   pacman : FormatOptions
+  /// Path of an OpenPGP private key (relative to the configuration file) to
+  /// sign rpm and Arch Linux packages with; `build --sign-key` overrides it.
+  sign_key : String?
 } derive(Eq, Debug)
 
 ///|
@@ -112,7 +115,7 @@ let top_level_keys : Array[String] = [
   "$schema", "name", "version", "release", "epoch", "arch", "maintainer", "description",
   "homepage", "license", "vendor", "section", "priority", "depends", "recommends",
   "suggests", "conflicts", "replaces", "provides", "mtime", "contents", "scripts",
-  "compression", "deb", "rpm", "pacman",
+  "compression", "deb", "rpm", "pacman", "sign_key",
 ]
 
 ///|
@@ -483,5 +486,6 @@ pub fn Config::parse(text : String) -> Config raise SpecError {
     deb: parse_format_options(map.get("deb"), "deb"),
     rpm: parse_format_options(map.get("rpm"), "rpm"),
     pacman: parse_format_options(map.get("pacman"), "pacman"),
+    sign_key: opt_string(map, "sign_key", "sign_key"),
   }
 }

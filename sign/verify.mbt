@@ -346,3 +346,51 @@ pub fn PublicKeyring::verify_cleartext(
   }
   raise failure
 }
+
+///|
+/// What a signature says about itself, without checking it.
+pub(all) struct SignatureInfo {
+  /// The 16 hexadecimal digits of the signing key's id, in capitals.
+  key_id : String
+  /// The signature time, in seconds since 1970.
+  created : Int64
+} derive(Eq, Debug)
+
+///|
+/// Read who signed and when from the first signature in `signature` (binary
+/// or armored) without checking it against any key.
+pub fn signature_info(signature : Bytes) -> SignatureInfo raise SignError {
+  let body = signature_packets(signature)[0]
+  let sig = @packet.SignaturePacket::parse(body[:]) catch {
+    e => raise Invalid(message="damaged signature: \{describe(e)}")
+  }
+  let key_id = match
+    @packet.find_subpacket(
+      sig.hashed_subpackets(),
+      @packet.SIGSUB_ISSUER_FINGERPRINT,
+    ) {
+    Some(b) if b.length() == 21 => b[13:21].to_owned()
+    _ =>
+      match
+        @packet.find_subpacket(
+          sig.hashed_subpackets(),
+          @packet.SIGSUB_ISSUER_KEY_ID,
+        ) {
+        Some(b) => b
+        None =>
+          match
+            @packet.find_subpacket(
+              sig.unhashed_subpackets(),
+              @packet.SIGSUB_ISSUER_KEY_ID,
+            ) {
+            Some(b) => b
+            None => raise Invalid(message="the signature names no issuer")
+          }
+      }
+  }
+  let created = match sig.creation_time() {
+    Some(t) => t.to_int64() & 0xFFFFFFFFL
+    None => 0L
+  }
+  { key_id: hex_upper(key_id), created, }
+}

@@ -6,6 +6,7 @@ import {
 }
 
 // Values
+pub fn signature_info(Bytes) -> SignatureInfo raise SignError
 
 // Errors
 pub(all) suberror SignError {
@@ -26,6 +27,11 @@ pub fn PublicKeyring::from_bytes(Bytes) -> Self raise SignError
 pub fn PublicKeyring::verify_cleartext(Self, String) -> (String, Verified) raise SignError
 pub fn PublicKeyring::verify_detached(Self, BytesView, Bytes) -> Verified raise SignError
 
+pub(all) struct SignatureInfo {
+  key_id : String
+  created : Int64
+} derive(Eq, @debug.Debug)
+
 pub struct SigningKey {
   // private fields
 }
@@ -39,6 +45,7 @@ pub fn SigningKey::from_bytes(Bytes) -> Self raise SignError
 pub fn SigningKey::is_rsa(Self) -> Bool
 pub fn SigningKey::key_id(Self) -> String
 pub fn SigningKey::rsa_bits(Self) -> Int32
+pub fn SigningKey::signing_time(Self, Int64) -> Int64
 
 pub(all) struct Verified {
   fingerprint : String

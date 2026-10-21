@@ -32,7 +32,7 @@ pub fn sign_apt(
     None =>
       raise Invalid(file="Release", message="the index has no Release file")
   }
-  let time = if created > key.created() { created } else { key.created() }
+  let time = key.signing_time(created)
   let clear = key.cleartext(utf8_text("Release", release), created=time) catch {
     err => raise Invalid(file="InRelease", message="\{err}")
   }
@@ -63,7 +63,7 @@ pub fn sign_yum(
         message="the index has no repomd.xml file",
       )
   }
-  let time = if created > key.created() { created } else { key.created() }
+  let time = key.signing_time(created)
   let detached = key.detached_armored(repomd[:], created=time) catch {
     err => raise Invalid(file="repodata/repomd.xml.asc", message="\{err}")
   }

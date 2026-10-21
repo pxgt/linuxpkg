@@ -52,14 +52,3 @@ fn load_keyring(path : String) -> @sign.PublicKeyring raise CliError {
     err => raise Failed("\{path}: \{err}")
   }
 }
-
-///|
-/// The signature time for a build: the build time, but never before the key
-/// was made (a signature older than its key is rejected by `gpgv`).
-fn signature_time(key : @sign.SigningKey, stamp : Int64) -> Int64 {
-  if stamp > key.created() {
-    stamp
-  } else {
-    key.created()
-  }
-}

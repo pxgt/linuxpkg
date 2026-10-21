@@ -27,3 +27,13 @@ pub extend Verified with Debug::{to_repr}
 #deprecated("Use `==` or `!=` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Verified with Eq::{equal, not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` or `debug_inspect` instead", skip_current_package=true)
+#doc(hidden)
+pub extend SignatureInfo with Debug::{to_repr}
+
+///|
+#deprecated("Use `==` or `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend SignatureInfo with Eq::{equal, not_equal}

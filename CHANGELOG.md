@@ -15,6 +15,16 @@ All notable changes are recorded here. The format follows
   `justinwongcn/moonpgp`.
 - `linuxpkg repo <dir> --sign-key KEY` writes `InRelease` and `Release.gpg` (apt) and `repodata/repomd.xml.asc`
   (dnf); library: `repo.sign_apt`, `repo.sign_yum`, `repo.check_apt_signature`, `repo.check_yum_signature`.
+- `linuxpkg build --sign-key KEY` (or `"sign_key"` in the configuration): rpm packages get an OpenPGP signature over
+  the main header in the signature header (tag 268 for RSA, 267 for Ed25519, as `rpmsign` writes it; `rpm -K` shows
+  `Header V4 RSA/SHA256 Signature ... OK`), Arch packages a detached `<package>.sig` next to them. Library:
+  `rpm.sign`, `RpmPackage::signature_status`. Debian packages are not signed one by one: sign the repository.
+- `linuxpkg verify <package> [--keyring KEY]` reports the signature of rpm and Arch packages and checks it against
+  the keys given; `verify <directory> --keyring KEY` checks `InRelease`, `Release.gpg` and `repomd.xml.asc`.
+  A package without a valid signature fails with exit status 2 when a keyring is given.
+- Checked with `rpm -K`, `gpgv`, `rpmsign` (its signatures verify with `verify --keyring`), apt, dnf and pacman
+  (`LocalFileSigLevel = Required`) in the Debian, Ubuntu, Fedora, openEuler and Arch containers, including changed
+  and unsigned packages being refused.
 
 ## [0.3.1] - 2026-10-20
 

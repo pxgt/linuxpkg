@@ -120,11 +120,7 @@ fn cmd_repo(args : Array[String]) -> Int32 raise CliError {
           "apt: \{debs.length()} package(s); use `deb [trusted=yes] file:<dir> ./`",
         )
       Some((key, ring)) => {
-        let signed = @repo.sign_apt(
-          files,
-          key,
-          created=signature_time(key, stamp),
-        ) catch {
+        let signed = @repo.sign_apt(files, key, created=key.signing_time(stamp)) catch {
           err => raise Failed("\{err}")
         }
         write_index(dir, signed)
@@ -156,11 +152,7 @@ fn cmd_repo(args : Array[String]) -> Int32 raise CliError {
           "yum: \{rpms.length()} package(s); use a .repo file with baseurl=file://<dir> and gpgcheck=0",
         )
       Some((key, ring)) => {
-        let signed = @repo.sign_yum(
-          files,
-          key,
-          created=signature_time(key, stamp),
-        ) catch {
+        let signed = @repo.sign_yum(files, key, created=key.signing_time(stamp)) catch {
           err => raise Failed("\{err}")
         }
         write_index(dir, signed)

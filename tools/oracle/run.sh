@@ -704,6 +704,76 @@ if command -v gpgv >/dev/null 2>&1 && command -v gpg >/dev/null 2>&1; then
   unset GNUPGHOME
 fi
 
+# ---------------------------------------------------------------- signed packages
+if command -v gpgv >/dev/null 2>&1 && command -v gpg >/dev/null 2>&1; then
+  step "sign: signed rpm and Arch packages are accepted by rpm -K and gpgv; foreign signatures are accepted by verify --keyring"
+  SIGNP="$WORK/signpkg"
+  mkdir -p "$SIGNP"
+  for KEY in rsa2048 ed25519; do
+    SECRET="$ROOT/testdata/sign/test-only-$KEY.sec.asc"
+    PUBLIC="$ROOT/testdata/sign/test-only-$KEY.pub.asc"
+    P="$SIGNP/$KEY"
+    mkdir -p "$P/out" "$P/gnupg"
+    chmod 700 "$P/gnupg"
+    SOURCE_DATE_EPOCH=1700000000 "$BIN" build "$EXAMPLE" --format all --out "$P/out" --sign-key "$SECRET" >/dev/null
+    gpg --batch --dearmor <"$PUBLIC" >"$P/pub.gpg"
+    ARCHPKG="$(ls "$P"/out/hello-1.0.0-1-any.pkg.tar.zst)"
+    # Arch: the detached signature next to the package.
+    [ -f "$ARCHPKG.sig" ] || die "$KEY: no .sig next to the Arch package"
+    gpgv --keyring "$P/pub.gpg" "$ARCHPKG.sig" "$ARCHPKG" 2>"$P/gpgv.txt" || { cat "$P/gpgv.txt"; die "$KEY: gpgv rejects the Arch package signature"; }
+    expect_in "$KEY: gpgv says Good signature for the Arch package" "Good signature" "$(cat "$P/gpgv.txt")"
+    expect_in "$KEY: verify --keyring accepts the Arch package" "signature: OK" "$("$BIN" verify "$ARCHPKG" --keyring "$PUBLIC")"
+    # A signature made by gpg itself is accepted by our verify.
+    GNUPGHOME="$P/gnupg" gpg --batch --quiet --import "$SECRET" 2>/dev/null
+    cp "$ARCHPKG" "$P/gpgmade.pkg.tar.zst"
+    GNUPGHOME="$P/gnupg" gpg --batch --yes --detach-sign --digest-algo SHA256 -o "$P/gpgmade.pkg.tar.zst.sig" "$P/gpgmade.pkg.tar.zst"
+    expect_in "$KEY: verify --keyring accepts a signature made by gpg" "signature: OK" "$("$BIN" verify "$P/gpgmade.pkg.tar.zst" --keyring "$PUBLIC")"
+    # A changed package is refused by gpgv and by verify.
+    cp "$ARCHPKG" "$P/changed.pkg.tar.zst"
+    cp "$ARCHPKG.sig" "$P/changed.pkg.tar.zst.sig"
+    printf 'x' >>"$P/changed.pkg.tar.zst"
+    if gpgv --keyring "$P/pub.gpg" "$P/changed.pkg.tar.zst.sig" "$P/changed.pkg.tar.zst" 2>/dev/null; then die "$KEY: gpgv accepted a changed Arch package"; fi
+    if "$BIN" verify "$P/changed.pkg.tar.zst" --keyring "$PUBLIC" >/dev/null 2>&1; then die "$KEY: verify accepted a changed Arch package"; fi
+    pass "$KEY: a changed Arch package is refused by gpgv and by verify"
+    if [ "$HAVE_RPM" = 1 ]; then
+      RPMPKG="$P/out/hello-1.0.0-1.noarch.rpm"
+      mkdir -p "$P/rpmdb"
+      rpm --dbpath "$P/rpmdb" --import "$PUBLIC"
+      rpm --dbpath "$P/rpmdb" -Kv "$RPMPKG" >"$P/rpmK.txt" 2>&1 || { cat "$P/rpmK.txt"; die "$KEY: rpm -K rejects the signed rpm"; }
+      cat "$P/rpmK.txt"
+      if [ "$KEY" = rsa2048 ]; then WANT="Header V4 RSA/SHA256 Signature"; else WANT="Header V4 EdDSA/SHA256 Signature"; fi
+      expect_in "$KEY: rpm -Kv names the signature" "$WANT" "$(cat "$P/rpmK.txt")"
+      SHORT="$(awk -v k="$KEY" '$1==k {print tolower(substr($2, 33))}' "$ROOT/testdata/sign/fingerprints.txt")"
+      expect_in "$KEY: rpm -Kv says OK for the signature" "key ID $SHORT: OK" "$(cat "$P/rpmK.txt")"
+      if grep -qE "NOT OK|BAD|NOKEY" "$P/rpmK.txt"; then die "$KEY: rpm -Kv reports a problem"; fi
+      rpm --dbpath "$P/rpmempty" -Kv "$RPMPKG" >"$P/rpmK-nokey.txt" 2>&1 || true
+      expect_in "$KEY: without the key rpm says NOKEY" "NOKEY" "$(cat "$P/rpmK-nokey.txt")"
+      expect_in "$KEY: verify --keyring accepts the rpm" "signature: OK" "$("$BIN" verify "$RPMPKG" --keyring "$PUBLIC")"
+      # Changing one byte of the main header breaks the signature for rpm and for us.
+      python3 - "$RPMPKG" "$P/changed.rpm" <<'PY'
+import sys
+data = bytearray(open(sys.argv[1], "rb").read())
+at = data.index(b"hello ", 96)  # the package name, in the main header
+data[at] ^= 1
+open(sys.argv[2], "wb").write(data)
+PY
+      if rpm --dbpath "$P/rpmdb" -K "$P/changed.rpm" >"$P/rpmK-bad.txt" 2>&1; then cat "$P/rpmK-bad.txt"; die "$KEY: rpm -K accepted a changed header"; fi
+      expect_in "$KEY: rpm -K refuses the changed header" "NOT OK" "$(cat "$P/rpmK-bad.txt")"
+      if "$BIN" verify "$P/changed.rpm" --keyring "$PUBLIC" >/dev/null 2>&1; then die "$KEY: verify accepted a changed rpm"; fi
+      pass "$KEY: a changed rpm is refused by rpm -K and by verify"
+      # rpmsign's signature on an rpm of ours is accepted by verify --keyring.
+      if command -v rpmsign >/dev/null 2>&1; then
+        "$BIN" build "$EXAMPLE" --format rpm --out "$P/unsigned" >/dev/null
+        FPR="$(awk -v k="${KEY}" '$1==k {print $2}' "$ROOT/testdata/sign/fingerprints.txt")"
+        rpmsign --define "_gpg_name $FPR" --define "__gpg /usr/bin/gpg" --define "_gpg_path $P/gnupg" --addsign "$P/unsigned/hello-1.0.0-1.noarch.rpm" >"$P/rpmsign.txt" 2>&1 || { cat "$P/rpmsign.txt"; die "$KEY: rpmsign failed"; }
+        expect_in "$KEY: verify --keyring accepts rpmsign's signature" "signature: OK" "$("$BIN" verify "$P/unsigned/hello-1.0.0-1.noarch.rpm" --keyring "$PUBLIC")"
+        rpm --dbpath "$P/rpmdb" -K "$P/unsigned/hello-1.0.0-1.noarch.rpm" >/dev/null
+        pass "$KEY: rpmsign's signature is verified by linuxpkg, and rpm -K agrees"
+      fi
+    fi
+  done
+fi
+
 # ---------------------------------------------------------------- arch linux
 if command -v bsdtar >/dev/null 2>&1; then
   step "arch: packages for pacman, read back with bsdtar (libarchive, pacman's own reader)"
