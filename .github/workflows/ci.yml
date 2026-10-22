@@ -71,7 +71,7 @@ jobs:
           node tools/web_smoke.js _build/js/release/build/web/web.js examples/hello /tmp/ws/cli /tmp/ws/json
 
       - name: Enforce the core line-coverage floor
-        run: python3 tools/check_core_coverage.py --minimum 80
+        run: python3 tools/check_core_coverage.py --minimum 90
 
       - name: Verify package artifact
         run: moon package --frozen

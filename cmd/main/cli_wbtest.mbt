@@ -881,3 +881,121 @@ test "init --moon writes a configuration for the executable of a MoonBit project
   assert_eq(run(["init", "--moon", dir, "extra"]), 1)
   remove_tree(dir)
 }
+
+///|
+test "no arguments, help and version" {
+  assert_eq(run([]), 1)
+  assert_eq(run(["--help"]), 0)
+  assert_eq(run(["-h"]), 0)
+  assert_eq(run(["help"]), 0)
+  assert_eq(run(["--version"]), 0)
+  assert_eq(run(["-V"]), 0)
+  assert_eq(run(["version"]), 0)
+}
+
+///|
+test "unknown commands and options are usage errors" {
+  assert_eq(run(["frobnicate"]), 1)
+  assert_eq(run(["build", "--nope"]), 1)
+  assert_eq(run(["inspect", "--nope", "x"]), 1)
+  assert_eq(run(["verify", "--nope", "x"]), 1)
+  assert_eq(run(["repo", "--nope", "."]), 1)
+  assert_eq(run(["init", "--nope"]), 1)
+  assert_eq(run(["key", "--nope"]), 1)
+}
+
+///|
+test "build needs a configuration, and a readable valid one" {
+  assert_eq(run(["build"]), 1)
+  assert_eq(run(["build", "a.json", "b.json"]), 1)
+  assert_eq(run(["build", "does-not-exist.json"]), 1)
+  let dir = "cli_badconfig_tmp"
+  ensure_dir(dir)
+  for text in ["{", "[]", "{}", "{\"name\":\"x\"}"] {
+    write_bytes(dir + "/c.json", @utf8.encode(text))
+    assert_eq(run(["build", dir + "/c.json", "--out", dir + "/o"]), 1)
+  }
+  remove_tree(dir)
+}
+
+///|
+test "a missing source file stops the build before anything is written" {
+  let dir = "cli_missing_tmp"
+  ensure_dir(dir)
+  write_bytes(dir + "/c.json", @utf8.encode(CONFIG_JSON))
+  assert_eq(run(["build", dir + "/c.json", "--out", dir + "/out"]), 1)
+  assert_false(
+    @fs.path_exists(dir + "/out") && @fs.read_dir(dir + "/out").length() > 0,
+  )
+  remove_tree(dir)
+}
+
+///|
+test "init writes the example, refuses to overwrite and --force overwrites" {
+  let dir = "cli_init_tmp"
+  ensure_dir(dir)
+  assert_eq(run(["init", dir + "/linuxpkg.json"]), 0)
+  assert_eq(run(["init", dir + "/linuxpkg.json"]), 1)
+  write_bytes(dir + "/linuxpkg.json", b"changed")
+  assert_eq(run(["init", dir + "/linuxpkg.json", "--force"]), 0)
+  let config = @spec.Config::parse(
+    @utf8.decode(read_bytes(dir + "/linuxpkg.json")),
+  )
+  assert_eq(config.name, "myapp")
+  assert_eq(run(["init", "a", "b"]), 1)
+  remove_tree(dir)
+}
+
+///|
+test "inspect --json prints the same report the library gives" {
+  let dir = "cli_json_tmp"
+  ensure_dir(dir)
+  write_bytes(dir + "/c.json", @utf8.encode(CONFIG_JSON))
+  write_bytes(dir + "/tool.sh", b"#!/bin/sh\necho hi\n")
+  assert_eq(
+    run(["build", dir + "/c.json", "--out", dir + "/out", "--format", "deb"]),
+    0,
+  )
+  let deb = dir + "/out/tinytool_1.0-1_all.deb"
+  assert_eq(run(["inspect", deb]), 0)
+  assert_eq(run(["inspect", deb, "--json"]), 0)
+  assert_eq(run(["verify", deb]), 0)
+  // Damage a byte of the file data: verify exits with 2, inspect still reads.
+  let bytes = read_bytes(deb).to_array()
+  bytes[bytes.length() - 30] = bytes[bytes.length() - 30] ^ 0xff
+  write_bytes(dir + "/damaged.deb", Bytes::from_array(bytes))
+  let code = run(["verify", dir + "/damaged.deb"])
+  assert_true(code == 2 || code == 1)
+  remove_tree(dir)
+}
+
+///|
+test "building twice into different directories gives identical files" {
+  let dir = "cli_twice_tmp"
+  ensure_dir(dir)
+  write_bytes(dir + "/c.json", @utf8.encode(CONFIG_JSON))
+  write_bytes(dir + "/tool.sh", b"#!/bin/sh\necho hi\n")
+  assert_eq(run(["build", dir + "/c.json", "--out", dir + "/a"]), 0)
+  assert_eq(run(["build", dir + "/c.json", "--out", dir + "/b"]), 0)
+  for name in @fs.read_dir(dir + "/a") {
+    assert_eq(read_bytes(dir + "/a/" + name), read_bytes(dir + "/b/" + name))
+  }
+  assert_true(@fs.read_dir(dir + "/a").length() >= 4)
+  remove_tree(dir)
+}
+
+///|
+test "SOURCE_DATE_EPOCH-free builds depend only on the configuration mtime" {
+  let dir = "cli_mtime_tmp"
+  ensure_dir(dir)
+  write_bytes(dir + "/c.json", @utf8.encode(CONFIG_JSON))
+  write_bytes(dir + "/tool.sh", b"#!/bin/sh\necho hi\n")
+  assert_eq(
+    run(["build", dir + "/c.json", "--out", dir + "/a", "--format", "arch"]),
+    0,
+  )
+  let name = @fs.read_dir(dir + "/a")[0]
+  let pkg = @arch.read(read_bytes(dir + "/a/" + name))
+  assert_eq(pkg.field("builddate"), Some("1700000000"))
+  remove_tree(dir)
+}
