@@ -1110,3 +1110,119 @@ test "init --moon takes the architecture from the built binary" {
   assert_eq(fallback.arch, @spec.Arch::Amd64)
   remove_tree(dir)
 }
+
+///|
+test "convert and build read an nFPM configuration" {
+  let dir = "cli_nfpm_tmp"
+  ensure_dir(dir)
+  write_bytes(dir + "/hello.sh", b"#!/bin/sh\necho hi\n")
+  write_bytes(dir + "/hello.conf", b"x=1\n")
+  let yaml =
+    #|name: hello
+    #|arch: amd64
+    #|version: v1.2.3
+    #|release: 2
+    #|maintainer: "J <j@example.org>"
+    #|description: Says hi
+    #|depends: [bash]
+    #|contents:
+    #|  - src: cli_nfpm_tmp/hello.sh
+    #|    dst: /usr/bin/hello
+    #|  - src: cli_nfpm_tmp/hello.conf
+    #|    dst: /etc/hello.conf
+    #|    type: config
+    #|deb:
+    #|  predepends: [dpkg]
+    #|overrides:
+    #|  rpm:
+    #|    depends: [bash, coreutils]
+  write_bytes(dir + "/nfpm.yaml", @utf8.encode(yaml))
+  let config = dir + "/nfpm.yaml"
+  // convert: to standard output, to a file, for one packager.
+  assert_eq(run(["convert", config]), 0)
+  assert_eq(
+    run(["convert", config, "--format", "rpm", "-o", dir + "/rpm.json"]),
+    0,
+  )
+  let converted = @spec.Config::parse(
+    @utf8.decode(read_bytes(dir + "/rpm.json")),
+  )
+  assert_eq(converted.version, "1.2.3")
+  assert_eq(converted.depends.map(d => d.name), ["bash", "coreutils"])
+  assert_eq(run(["convert", config, "-o", dir + "/rpm.json"]), 1)
+  assert_eq(run(["convert", config, "--force", "-o", dir + "/rpm.json"]), 0)
+  assert_eq(run(["convert", config, "--format", "msi"]), 1)
+  assert_eq(run(["convert"]), 1)
+  assert_eq(run(["convert", dir + "/missing.yaml"]), 1)
+  // build: all four packagers from the one file.
+  assert_eq(run(["build", config, "--out", dir + "/out"]), 0)
+  assert_true(@fs.path_exists(dir + "/out/hello_1.2.3-2_amd64.deb"))
+  assert_true(@fs.path_exists(dir + "/out/hello-1.2.3-2.x86_64.rpm"))
+  assert_true(@fs.path_exists(dir + "/out/hello-1.2.3-2-x86_64.pkg.tar.zst"))
+  assert_true(@fs.path_exists(dir + "/out/hello-1.2.3-r2.apk"))
+  // The override reached the rpm only.
+  let rpm = @rpm.read(read_bytes(dir + "/out/hello-1.2.3-2.x86_64.rpm"))
+  guard rpm.to_json() is Object(report) else { fail("object expected") }
+  assert_eq(
+    report.get("depends"),
+    Some(Json::array([Json::string("bash"), Json::string("coreutils")])),
+  )
+  let deb = @deb.read(read_bytes(dir + "/out/hello_1.2.3-2_amd64.deb"))
+  guard deb.to_json() is Object(deb_report) else { fail("object expected") }
+  assert_eq(
+    deb_report.get("depends"),
+    Some(Json::array([Json::string("bash")])),
+  )
+  // One packager, with .yml too.
+  write_bytes(dir + "/other.yml", @utf8.encode(yaml))
+  assert_eq(
+    run(["build", dir + "/other.yml", "--format", "deb", "--out", dir + "/one"]),
+    0,
+  )
+  assert_eq(@fs.read_dir(dir + "/one").length(), 1)
+  // `arch` and `archlinux` both work for the convert command.
+  assert_eq(run(["convert", config, "--format", "arch"]), 0)
+  // A field nFPM does not have, and a missing source file, stop the build.
+  write_bytes(dir + "/bad.yaml", @utf8.encode(yaml + "\ncolour: red\n"))
+  assert_eq(run(["build", dir + "/bad.yaml", "--out", dir + "/bad"]), 1)
+  assert_false(@fs.path_exists(dir + "/bad"))
+  write_bytes(
+    dir + "/missing.yaml",
+    @utf8.encode(yaml.replace(old="hello.conf", new="nothing.conf")),
+  )
+  assert_eq(run(["build", dir + "/missing.yaml", "--out", dir + "/bad"]), 1)
+  // An ELF file for another CPU is refused for nFPM files too.
+  write_bytes(dir + "/hello.sh", elf_header(183))
+  assert_eq(run(["build", config, "--format", "deb", "--out", dir + "/elf"]), 1)
+  assert_eq(
+    run([
+      "build",
+      config,
+      "--format",
+      "deb",
+      "--allow-arch-mismatch",
+      "--out",
+      dir + "/elf",
+    ]),
+    0,
+  )
+  // With all formats, one that fails does not stop the others, but the exit status says so.
+  write_bytes(
+    dir + "/partial.yaml",
+    @utf8.encode(
+      yaml.replace(old="depends: [bash]", new="depends: [bash]\n  # x") +
+      "\noverrides:\n  deb:\n    depends: [\"a | b\"]\n",
+    ),
+  )
+  let status = run([
+    "build",
+    dir + "/partial.yaml",
+    "--allow-arch-mismatch",
+    "--out",
+    dir + "/partial",
+  ])
+  assert_eq(status, 1)
+  assert_true(@fs.path_exists(dir + "/partial/hello-1.2.3-2.x86_64.rpm"))
+  assert_false(@fs.path_exists(dir + "/partial/hello_1.2.3-2_amd64.deb"))
+  remove_tree(dir)
+}

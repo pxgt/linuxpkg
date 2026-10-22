@@ -1,0 +1,67 @@
+# Differences between nFPM v2.48.0 and linuxpkg that are known and explained (docs/nfpm.md).
+# `tools/nfpm/compare.py` fails on any other difference and on an entry here that no longer happens.
+# Columns: configuration (or *), format (deb rpm apk arch), what differs.
+
+# --- deb ---
+# nFPM leaves Section empty unless the file sets one; linuxpkg writes "misc".
+* deb fields.Section
+# nFPM omits the revision when "release" is not set; linuxpkg always writes one (-1).
+* deb fields.Version
+# Not supported (reported as warnings by `convert`): Breaks and Pre-Depends.
+deb.breaks deb fields.Breaks
+deb.predepends deb fields.Pre-Depends
+# nFPM stores symbolic links with mode 0 (l---------); linuxpkg uses 0777 like dpkg and rpmbuild.
+core.symlink deb files[/path/to/symlink]
+# nFPM adds copyright and changelog files for a "changelog:" setting; linuxpkg leaves the changelog out.
+core.withchangelog deb files[/usr/share/doc/foo/changelog.Debian.gz]
+
+# --- rpm ---
+# The rpm Group is the "section" of linuxpkg ("misc" when the file does not set rpm.group).
+* rpm info.group
+# nFPM also provides name(arch) = version, as rpmbuild does.
+* rpm relations.provides
+# Without a license nFPM writes none, linuxpkg "Unspecified".
+deb.breaks rpm info.license
+deb.predepends rpm info.license
+# Not supported: rpm.requires.post (Requires(post)).
+rpm.postrequires rpm relations.requires
+core.symlink rpm files[/path/to/symlink]
+# config|noreplace becomes %config in linuxpkg, %config(noreplace) in nFPM.
+upgrade.v1 rpm files[/etc/noreplace.conf]
+upgrade.v2 rpm files[/etc/noreplace.conf]
+
+# --- apk ---
+# Alpine .PKGINFO: nFPM writes "maintainer", linuxpkg "packager" and "origin"; the version carries -r<release>.
+* apk pkginfo.maintainer
+* apk pkginfo.origin
+* apk pkginfo.packager
+* apk pkginfo.pkgver
+core.symlink apk files[/path/to/symlink]
+
+# --- arch ---
+# nFPM writes "Unknown Packager", the whole description and no pkgtype; linuxpkg the maintainer, the summary and pkgtype=pkg
+# like makepkg; the version of a pre-release is written differently.
+* arch pkginfo.packager
+* arch pkginfo.pkgdesc
+* arch pkginfo.pkgver
+* arch pkginfo.xdata
+deb.breaks arch pkginfo.license
+deb.predepends arch pkginfo.license
+core.symlink arch files[/path/to/symlink]
+
+# --- built by one tool only ---
+# Alternatives in dependencies (a | b, (a or b)) are not supported.
+core.overrides deb ours-failed
+core.overrides rpm ours-failed
+# "release" must be a number for Alpine and Arch Linux packages.
+core.simple apk ours-failed
+core.simple arch ours-failed
+core.withchangelog apk ours-failed
+core.withchangelog arch ours-failed
+# An ELF file for another CPU than the package is refused unless allow_arch_mismatch is set (nFPM does not look).
+rpm.elfcolors deb ours-failed
+rpm.elfcolors rpm ours-failed
+rpm.elfcolors apk ours-failed
+rpm.elfcolors arch ours-failed
+# lzma is not written.
+rpm.lzma.compression rpm ours-failed

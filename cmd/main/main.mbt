@@ -19,6 +19,7 @@ const USAGE : String =
   #|  linuxpkg verify <package|repository dir> [--keyring KEY]
   #|  linuxpkg repo <dir> [--format deb|rpm|all] [--sign-key KEY]
   #|  linuxpkg elf <file> [--json]
+  #|  linuxpkg convert <nfpm.yaml> [--format deb|rpm|apk|arch] [-o linuxpkg.json]
   #|  linuxpkg key apk-pub|info <private key> [--name NAME] [--out DIR]
   #|  linuxpkg init [PATH] [--force]
   #|  linuxpkg init --moon [DIR] [--bin PACKAGE] [--name NAME] [--arch ARCH]
@@ -29,6 +30,7 @@ const USAGE : String =
   #|  inspect  Show the metadata and files of a package.
   #|  verify   Check the checksums of a package.
   #|  repo     Write apt and dnf repository metadata for the packages in a directory.
+  #|  convert  Turn an nFPM configuration into a linuxpkg.json (build also reads nfpm.yaml).
   #|  elf      Show the architecture, linking, interpreter and libraries of an ELF file.
   #|  key      Export the Alpine public key (apk-pub) of an RSA signing key, or show
   #|           which key a file holds (info).
@@ -106,6 +108,7 @@ fn dispatch(command : String, args : Array[String]) -> Int32 raise CliError {
     "repo" => cmd_repo(args)
     "key" => cmd_key(args)
     "elf" => cmd_elf(args)
+    "convert" => cmd_convert(args)
     _ => raise Usage("unknown command \"\{command}\"")
   }
 }

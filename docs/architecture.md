@@ -21,6 +21,7 @@ flowchart TB
     repo["repo<br/>apt, dnf, pacman, apk indexes"]
     sign["sign<br/>OpenPGP, RSA PKCS#1"]
     elf["elf<br/>ELF headers: CPU, linking, libraries"]
+    nfpm["nfpm<br/>reads nfpm.yaml (YAML)"]
   end
   subgraph base["Foundations"]
     spec["spec<br/>package model, config, validation"]
@@ -30,7 +31,7 @@ flowchart TB
     compress["compress<br/>gzip, xz, zstd, lzma"]
   end
   site --> web
-  cli --> deb & rpm & arch & apk & repo & sign
+  cli --> deb & rpm & arch & apk & repo & sign & nfpm
   web --> deb & rpm & arch & apk & sign
   action --> cli
   deb --> spec & tar & ar & compress & elf
@@ -40,6 +41,7 @@ flowchart TB
   spec --> elf
   repo --> deb & rpm & arch & apk & sign & compress
   spec --> compress
+  nfpm --> elf
 ```
 
 * **Foundations.** `spec` holds the one package model (`PackageSpec`), the `linuxpkg.json` parser and every validation rule

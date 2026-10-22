@@ -9,6 +9,7 @@ import {
   "Xpeng/linuxpkg/apk",
   "Xpeng/linuxpkg/repo",
   "Xpeng/linuxpkg/sign",
+  "Xpeng/linuxpkg/nfpm",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
   "moonbitlang/core/env",

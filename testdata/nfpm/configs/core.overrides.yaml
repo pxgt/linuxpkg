@@ -1,0 +1,58 @@
+name: "foo"
+arch: "${BUILD_ARCH}"
+platform: "linux"
+version: "v1.2.3-beta"
+maintainer: "Foo Bar"
+depends:
+- bash
+provides:
+- fake
+replaces:
+- foo
+suggests:
+- zsh
+description: |
+  Foo bar
+    Multiple lines
+vendor: "foobar"
+homepage: "https://foobar.org"
+license: "MIT"
+contents:
+- src: ./testdata/fake
+  dst: /usr/bin/fake
+- src: ./testdata/acceptance/folder/*
+  dst: /usr/share/whatever/folder
+- src: ./testdata/whatever.conf
+  dst: /etc/foo/whatever.conf
+  type: config
+overrides:
+  rpm:
+    depends:
+      - (bash >= 4.4 or fish)
+    scripts:
+      preinstall: ./testdata/acceptance/scripts/preinstall.sh
+      postremove: ./testdata/acceptance/scripts/postremove.sh
+  deb:
+    depends:
+      - bash (>= 4.4) | fish
+    scripts:
+      postinstall: ./testdata/acceptance/scripts/postinstall.sh
+      preremove: ./testdata/acceptance/scripts/preremove.sh
+  apk:
+    depends:
+      - bash
+      - fish
+    scripts:
+      postinstall: ./testdata/acceptance/scripts/postinstall.sh
+      preremove: ./testdata/acceptance/scripts/preremove.sh
+  archlinux:
+    scripts:
+      postinstall: ./testdata/acceptance/scripts/postinstall.sh
+      preremove: ./testdata/acceptance/scripts/preremove.sh
+  ipk:
+    depends:
+      - bash
+      - fish
+    scripts:
+      postinstall: ./testdata/acceptance/scripts/postinstall.sh
+      preremove: ./testdata/acceptance/scripts/preremove.sh
