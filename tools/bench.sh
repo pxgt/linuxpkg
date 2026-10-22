@@ -67,7 +67,8 @@ PY
   if [ "$size" -le 50 ]; then comps=(gzip xz zstd); fi
   for c in "${comps[@]}"; do
     for fmt in deb rpm arch apk; do
-      if [ "$fmt" = apk ] && [ "$c" != gzip ]; then continue; fi
+      # xz and zstd cost the same in every format, so one format is enough
+      if [ "$c" != gzip ] && [ "$fmt" != deb ]; then continue; fi
       measure "native $fmt $c" "$NATIVE" build "$W/cfg-$size.json" --format "$fmt" --compression "$c" --out "$W/out-native"
       measure "wasm-gc $fmt $c" "$MOONRUN" "$WASM" -- build "$W/cfg-$size.json" --format "$fmt" --compression "$c" --out "$W/out-wasm"
     done
