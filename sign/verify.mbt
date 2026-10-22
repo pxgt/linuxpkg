@@ -260,11 +260,18 @@ fn signature_packets(signature : Bytes) -> Array[Bytes] raise SignError {
 ///|
 fn looks_armored(data : Bytes) -> Bool {
   let marker = "-----BEGIN PGP"
-  if data.length() < marker.length() {
+  // Blank lines in front of an armored signature are harmless.
+  let mut start = 0
+  while start < data.length() &&
+        (data[start] == b'
+' || data[start] == b'' || data[start] == b' ') {
+    start += 1
+  }
+  if data.length() - start < marker.length() {
     return false
   }
   for i, c in marker {
-    if data[i].to_int() != c.to_int() {
+    if data[start + i].to_int() != c.to_int() {
       return false
     }
   }
