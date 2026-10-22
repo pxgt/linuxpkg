@@ -30,6 +30,51 @@ fn big(octets : Bytes) -> BigInt {
 
 ///|
 /// Read a private key from its ASCII armor (`-----BEGIN PGP PRIVATE KEY BLOCK-----`).
+///
+/// # Example
+/// Sign a text with a test-only Ed25519 key (public on purpose, worthless) and check it again.
+/// The signature time is a parameter, so the output is always the same.
+/// ```mbt check
+/// test {
+///   let key = @sign.SigningKey::from_armored(
+///     (
+///       #|-----BEGIN PGP PRIVATE KEY BLOCK-----
+///       #|
+///       #|lFgEatjHaRYJKwYBBAHaRw8BAQdAjBG+o/exTH7GU6taTgS7oeumg9VLGukMf99h
+///       #|jujN4ZsAAP9tbT9TYF8gkR1ww0fRSMYgjxtumClkTEyXULz+UcRc5Q89tD5saW51
+///       #|eHBrZyB0ZXN0LW9ubHkgZWQyNTUxOSA8dGVzdC1vbmx5LWVkMjU1MTlAZXhhbXBs
+///       #|ZS5pbnZhbGlkPoiQBBMWCAA4FiEEZqIvF2DOKrsQBgRR4vl/WlC9DrMFAmrYx2kC
+///       #|GwMFCwkIBwIGFQoJCAsCBBYCAwECHgECF4AACgkQ4vl/WlC9DrOEXAD/X6kItwxk
+///       #|CJdPFPcNwdCOk27LlqLsybor/h+uBOwbq9QBAPzIiLA7Bsmn5KnwD8Qg6nqqYdWc
+///       #|UeepdrKKgtKKJ8sG
+///       #|=sNFR
+///       #|-----END PGP PRIVATE KEY BLOCK-----
+///     ),
+///   )
+///   assert_eq(key.fingerprint(), "66A22F1760CE2ABB10060451E2F97F5A50BD0EB3")
+///   let message = key.cleartext("hello\n", created=1800000000L)
+///   assert_true(message.has_prefix("-----BEGIN PGP SIGNED MESSAGE-----"))
+///   // The public halves of the key are enough to check the message.
+///   let ring = @sign.PublicKeyring::from_armored(
+///     (
+///       #|-----BEGIN PGP PRIVATE KEY BLOCK-----
+///       #|
+///       #|lFgEatjHaRYJKwYBBAHaRw8BAQdAjBG+o/exTH7GU6taTgS7oeumg9VLGukMf99h
+///       #|jujN4ZsAAP9tbT9TYF8gkR1ww0fRSMYgjxtumClkTEyXULz+UcRc5Q89tD5saW51
+///       #|eHBrZyB0ZXN0LW9ubHkgZWQyNTUxOSA8dGVzdC1vbmx5LWVkMjU1MTlAZXhhbXBs
+///       #|ZS5pbnZhbGlkPoiQBBMWCAA4FiEEZqIvF2DOKrsQBgRR4vl/WlC9DrMFAmrYx2kC
+///       #|GwMFCwkIBwIGFQoJCAsCBBYCAwECHgECF4AACgkQ4vl/WlC9DrOEXAD/X6kItwxk
+///       #|CJdPFPcNwdCOk27LlqLsybor/h+uBOwbq9QBAPzIiLA7Bsmn5KnwD8Qg6nqqYdWc
+///       #|UeepdrKKgtKKJ8sG
+///       #|=sNFR
+///       #|-----END PGP PRIVATE KEY BLOCK-----
+///     ),
+///   )
+///   let (text, signer) = ring.verify_cleartext(message)
+///   assert_eq(text, "hello\n")
+///   assert_eq(signer.key_id, key.key_id())
+/// }
+/// ```
 pub fn SigningKey::from_armored(text : String) -> SigningKey raise SignError {
   let block = @armor.decode(text) catch {
     e => raise Key(message="armor: \{describe(e)}")
