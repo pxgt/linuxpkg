@@ -670,7 +670,7 @@ arch_repo() {
       (cd /tmp/our-$kind && find . -type f | sort | xargs sha256sum) > /tmp/our-$kind.sums
       if [ "$(cat /tmp/ref-$kind.sums)" != "$(cat /tmp/our-$kind.sums)" ]; then
         echo "the $kind database differs from repo-add"; cat /tmp/ref-$kind.sums /tmp/our-$kind.sums
-        for f in $(cd /tmp/ref-$kind && find . -type f | sort); do echo "--- $f"; cat /tmp/ref-$kind/$f; echo "+++"; cat /tmp/our-$kind/$f; done
+        for f in $(cd /tmp/ref-$kind && find . -type f | sort); do echo "--- $f"; od -c /tmp/ref-$kind/$f | tail -n 12; echo "+++"; od -c /tmp/our-$kind/$f | tail -n 12; done
         exit 1
       fi
       echo "  ok: demo.$kind.tar.gz has the same entries as repo-add writes"
