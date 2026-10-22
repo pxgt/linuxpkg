@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-22
+
 ### Added
 
 - `linuxpkg init --moon [DIR]` writes a `linuxpkg.json` for the native executable of a MoonBit project (reads `moon.mod` or
@@ -39,6 +41,17 @@ All notable changes are recorded here. The format follows
 - Checked with `rpm -K`, `gpgv`, `rpmsign` (its signatures verify with `verify --keyring`), apt, dnf and pacman
   (`LocalFileSigLevel = Required`) in the Debian, Ubuntu, Fedora, openEuler and Arch containers, including changed
   and unsigned packages being refused.
+
+### Changed
+
+- `repo` writes the files of an index sorted byte by byte (the standard string comparison looks at the length first);
+  `--format all` of `repo` and `verify` now cover Arch and Alpine as well.
+- The CI coverage floor is 90% (measured 92.8%); 453 tests.
+
+### Known limits
+
+- Encrypted private keys are refused; Alpine signatures are RSA only; no bzip2; the pure-MoonBit zstd and xz encoders are
+  slow (about 0.3 and 0.5 MB/s) and weaker than the official ones, so gzip stays the default.
 
 ## [0.3.1] - 2026-10-20
 

@@ -12,7 +12,7 @@ Every package we write is checked against the official tools (`dpkg-deb`, `dpkg 
 `rpm -V`, `rpm2cpio`, `pacman -Qkk`, `apk audit`) and installed in Debian, Ubuntu, Fedora, openEuler, Arch Linux and Alpine
 containers in CI.
 
-> 状态：0.3.1 已发布到 mooncakes（`Xpeng/linuxpkg`）。deb、rpm、Arch Linux、Alpine 四种包的构建、检查、校验，以及 apt / dnf 软件源索引都已可用；压缩支持 gzip / xz / zstd / 不压缩。
+> 状态：0.4.0 已发布到 mooncakes（`Xpeng/linuxpkg`）。deb、rpm、Arch Linux、Alpine 四种包的构建、检查、校验，以及 apt / dnf 软件源索引都已可用；压缩支持 gzip / xz / zstd / 不压缩。
 
 ## 它是什么
 
@@ -68,8 +68,8 @@ moon add Xpeng/linuxpkg
 不安装，直接运行已发布的命令行程序（`moonx` 会下载预编译的 wasm 版本，文件路径请用绝对路径）：
 
 ```sh
-moonx Xpeng/linuxpkg/cmd/main@0.3.1 inspect /绝对路径/hello_1.0.0-1_all.deb
-moonx Xpeng/linuxpkg/cmd/main@0.3.1 verify /绝对路径/hello-1.0.0-1.noarch.rpm
+moonx Xpeng/linuxpkg/cmd/main@0.4.0 inspect /绝对路径/hello_1.0.0-1_all.deb
+moonx Xpeng/linuxpkg/cmd/main@0.4.0 verify /绝对路径/hello-1.0.0-1.noarch.rpm
 ```
 
 命令行程序也可以从源码构建：
