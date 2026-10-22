@@ -3,11 +3,17 @@ name: Release assets
 # Builds static Linux binaries (x86_64 and aarch64), packages them with linuxpkg itself
 # (deb, rpm, Arch, Alpine), writes SHA256SUMS (signed when the signing key is available),
 # installs the packages in distribution containers and, for a published release, uploads
-# everything to that release. "Run workflow" does the same without uploading, for a dry run.
+# everything to that release. "Run workflow" does the same without uploading, for a dry run;
+# with a tag name (for example v0.4.0) it builds that tag again and replaces the assets of its release.
 on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to build again and upload to (empty: dry run)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -25,6 +31,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
 
       - name: Install MoonBit
         run: |
@@ -72,6 +80,8 @@ jobs:
             args+=(--sign-key "$keyfile" --apk-key-name linuxpkg.rsa.pub)
           fi
           stage/linuxpkg "${args[@]}"
+          # The Alpine file name has no architecture; both builds would write the same asset name.
+          for f in dist/*-r1.apk; do mv "$f" "${f%.apk}.${{ matrix.arch }}.apk"; done
           ls -l dist
 
       - name: Upload the files
@@ -87,6 +97,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
       - name: Install MoonBit
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
@@ -143,10 +155,10 @@ jobs:
           path: dist/*
 
       - name: Attach everything to the release
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || inputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" dist/* --repo "${{ github.repository }}" --clobber
+        run: gh release upload "${{ github.event.release.tag_name || inputs.tag }}" dist/* --repo "${{ github.repository }}" --clobber
 
   install:
     name: install in ${{ matrix.image }}
@@ -164,6 +176,8 @@ jobs:
     steps:
       - name: Check out source (for the example)
         uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
 
       - name: Download the files
         uses: actions/download-artifact@v5
@@ -177,7 +191,7 @@ jobs:
             deb) pat='linuxpkg_*_amd64.deb'; cmd='dpkg -i' ;;
             rpm) pat='linuxpkg-*.x86_64.rpm'; cmd='rpm -i' ;;
             arch) pat='linuxpkg-*-x86_64.pkg.tar.zst'; cmd='pacman-key --init && pacman-key --add /site/linuxpkg.asc && pacman-key --lsign-key D6298A33CA44D77415DC1187ECDA980444350858 && pacman -U --noconfirm' ;;
-            apk) pat='linuxpkg-*-r1.apk'; cmd='apk add --allow-untrusted' ;;
+            apk) pat='linuxpkg-*-r1.x86_64.apk'; cmd='apk add --allow-untrusted' ;;
           esac
           docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/examples/hello:/hello:ro" -v "$PWD/site:/site:ro" "${{ matrix.image }}" sh -ec "
             f=\$(ls /dist/$pat | head -n 1)
