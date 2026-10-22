@@ -8,6 +8,12 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- **nFPM configurations**: `linuxpkg build nfpm.yaml` and the new `linuxpkg convert nfpm.yaml [--format deb|rpm|apk|arch] [-o FILE]`
+  read an nFPM file (a name ending in `.yaml` or `.yml`): `overrides` and `packager:` per format, environment variables (Go
+  `os.Expand` rules), version/pre-release/metadata splitting like nFPM, `type` config flavours, dir, symlink, tree, globs, `file_info`,
+  signature `key_file`, compression. Every unsupported field is named in a warning, unknown fields are errors. New package `nfpm`
+  (`@nfpm.convert`), YAML by `moonbitstack/moonyaml`. CI builds 29 nFPM acceptance configurations with the real nFPM v2.48.0 and
+  compares the packages; the explained differences are in `docs/nfpm.md`.
 - **ELF architecture detection** (new package `elf`, no file system, all backends): `build` stops when an ELF file in `contents`
   is for another CPU than `arch` (`contents[0]: /usr/bin/hello is an ELF file for arm64, but the package architecture is
   amd64`), warns when an `all` package contains ELF files, and accepts `"allow_arch_mismatch": true` /

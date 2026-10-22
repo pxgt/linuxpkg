@@ -100,6 +100,11 @@ jobs:
       - name: Compare linuxpkg output with dpkg and friends
         run: tools/oracle/run.sh
 
+      - name: nFPM configurations against the real nFPM
+        run: |
+          moon build --target native cmd/main
+          sh tools/nfpm/check.sh "$(find _build/native -name main.exe -path '*cmd/main*' | head -n 1)"
+
       - name: ELF architecture detection against readelf, with cross compilers
         run: |
           sudo apt-get install -y gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-s390x-linux-gnu gcc-powerpc64le-linux-gnu gcc-i686-linux-gnu gcc-arm-linux-gnueabihf gcc-arm-linux-gnueabi gcc-mips64el-linux-gnuabi64 binutils

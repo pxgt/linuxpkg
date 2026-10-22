@@ -71,6 +71,19 @@ a specification; the fix is in the code and the check that would catch it again 
 * **`apt-get` with a temporary source list.** Installing cross compilers in WSL failed because the configured mirror answered
   403; `apt-get -o Dir::Etc::sourcelist=...` pointing at `archive.ubuntu.com` fixed it without touching the system configuration.
 
+## nFPM configurations (October 22)
+
+* **YAML 1.2 turns `1.10` into 1.1 and `0755` into 755.** nFPM is written in Go, where `version: 1.10` stays the text it was and
+  `mode: 0755` is octal. The YAML reader here (YAML 1.2, no raw text for numbers) cannot tell, so the values of a handful of keys
+  are quoted before reading. All 38 acceptance configurations of nFPM then read exactly like PyYAML does, except these numbers.
+* **The glob of nFPM is not the one in the manual.** `folder/**/*` with the destination `/x/` produced only the files of the sub
+  directories in real nFPM: its glob library needs at least one directory for `**/`. The differential run against the real
+  binary found it, then a trailing slash on a plain file's `dst` (the file goes *into* that directory), then `config|noreplace`.
+* **nFPM writes symbolic links with mode 0** (`l---------` in `dpkg-deb -c` and `rpm -qlv`); the first diff of the symlink
+  configuration looked like a linuxpkg bug until `dpkg-deb` of a real dpkg-built package showed 0777.
+* **Sorting strings is not alphabetical.** The directory listing of the glob came out in the wrong order because `Array::sort`
+  on `String` compares lengths first (the same trap as in the repository indexes); the converter has its own comparison.
+
 ## Where the time went
 
 Most of the work was the loop "write it, give it to the official tool, read the complaint". That loop is now a script

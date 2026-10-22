@@ -1,0 +1,34 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Xpeng/linuxpkg/nfpm"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn convert(String, Host, format? : String) -> Converted raise NfpmError
+
+pub fn expand(String, (String) -> String) -> String
+
+// Errors
+pub(all) suberror NfpmError {
+  Invalid(String)
+} derive(Eq, @debug.Debug)
+pub impl Show for NfpmError
+
+// Types and methods
+pub(all) struct Converted {
+  config : Json
+  warnings : Array[String]
+}
+
+pub(all) struct Host {
+  getenv : (String) -> String?
+  read_file : (String) -> Bytes?
+  list_dir : (String) -> Array[String]?
+}
+pub fn Host::empty() -> Self
+
+// Type aliases
+
+// Traits

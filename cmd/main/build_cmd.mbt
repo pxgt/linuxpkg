@@ -1,20 +1,105 @@
 ///|
-fn load_spec(
+/// Is this file an nFPM configuration (`nfpm.yaml`)?
+fn is_nfpm_config(path : String) -> Bool {
+  path.has_suffix(".yaml") || path.has_suffix(".yml")
+}
+
+///|
+/// What the nFPM reader may ask of this machine: environment variables and
+/// files (relative to the current directory, like nFPM).
+fn cli_host() -> @nfpm.Host {
+  {
+    getenv: name => @env.get_env_var(name),
+    read_file: path => {
+      try @fs.read_file_to_bytes(path) catch {
+        _ => None
+      } noraise {
+        data => Some(data)
+      }
+    },
+    list_dir: path => {
+      let is_directory = try @fs.is_dir(path) catch {
+        _ => false
+      } noraise {
+        yes => yes
+      }
+      if is_directory {
+        try @fs.read_dir(path) catch {
+          _ => None
+        } noraise {
+          names => Some(names.to_owned())
+        }
+      } else {
+        None
+      }
+    },
+  }
+}
+
+///|
+/// Read an nFPM configuration for one packager and print what could not be
+/// carried over. `printed` holds the warnings shown already, so that building
+/// several formats does not repeat them.
+fn convert_nfpm(
   config_path : String,
-  allow_arch_mismatch~ : Bool = false,
-) -> (@spec.PackageSpec, @spec.Config) raise CliError {
+  format : String,
+  printed : Array[String],
+) -> @nfpm.Converted raise CliError {
   let text = @fs.read_file_to_string(config_path) catch {
     err => raise Failed(describe_io(err, "cannot read \"\{config_path}\""))
   }
-  let parsed = @spec.Config::parse(text) catch {
+  let converted = @nfpm.convert(text, cli_host(), format~) catch {
     err => raise Failed("\{config_path}: \{err}")
+  }
+  for warning in converted.warnings {
+    if !printed.contains(warning) {
+      printed.push(warning)
+      eprintln("linuxpkg: warning: \{warning}")
+    }
+  }
+  converted
+}
+
+///|
+fn load_nfpm(
+  config_path : String,
+  format : String,
+  printed : Array[String],
+) -> @spec.Config raise CliError {
+  let converted = convert_nfpm(config_path, format, printed)
+  @spec.Config::parse(converted.config.stringify()) catch {
+    err => raise Failed("\{config_path}: \{err}")
+  }
+}
+
+///|
+/// The configuration of `config_path` resolved to a package. `nfpm_format` is
+/// set for an nFPM file: that packager's view of it, with files looked up
+/// relative to the current directory (nFPM does so); otherwise the file is a
+/// `linuxpkg.json` and its files are relative to it.
+fn load_spec(
+  config_path : String,
+  allow_arch_mismatch~ : Bool = false,
+  nfpm_format? : String,
+  printed~ : Array[String] = [],
+) -> (@spec.PackageSpec, @spec.Config) raise CliError {
+  let (parsed, base) = match nfpm_format {
+    Some(format) => (load_nfpm(config_path, format, printed), "")
+    None => {
+      let text = @fs.read_file_to_string(config_path) catch {
+        err => raise Failed(describe_io(err, "cannot read \"\{config_path}\""))
+      }
+      let parsed = @spec.Config::parse(text) catch {
+        err => raise Failed("\{config_path}: \{err}")
+      }
+      (parsed, dirname(config_path))
+    }
   }
   let config = if allow_arch_mismatch {
     { ..parsed, allow_arch_mismatch: true, }
   } else {
     parsed
   }
-  let base = dirname(config_path)
   let files : Map[String, Bytes] = Map([])
   for source in config.sources() {
     files[source] = read_bytes(join_path(base, source))
@@ -27,7 +112,10 @@ fn load_spec(
     err => raise Failed("\{config_path}: \{err}")
   }
   for warning in config.elf_warnings(files) {
-    eprintln("linuxpkg: warning: \{warning}")
+    if !printed.contains(warning) {
+      printed.push(warning)
+      eprintln("linuxpkg: warning: \{warning}")
+    }
   }
   (spec, config)
 }
@@ -77,29 +165,117 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
       }
     None => None
   }
-  let (spec, config) = load_spec(
-    config_path,
-    allow_arch_mismatch=options.flag("allow_arch_mismatch"),
-  )
+  let allow_mismatch = options.flag("allow_arch_mismatch")
+  let out_dir = match options.value("out") {
+    Some(dir) => dir
+    None => ""
+  }
+  if is_nfpm_config(config_path) {
+    // One build per packager: nFPM's overrides differ for each of them.
+    let printed : Array[String] = []
+    let all = format == "all"
+    let wanted = match format {
+      "all" => ["deb", "rpm", "archlinux", "apk"]
+      "arch" => ["archlinux"]
+      other => [other]
+    }
+    let failures : Array[String] = []
+    for packager in wanted {
+      let own = if packager == "archlinux" { "arch" } else { packager }
+      try {
+        let (spec, config) = load_spec(
+          config_path,
+          allow_arch_mismatch=allow_mismatch,
+          nfpm_format=packager,
+          printed~,
+        )
+        build_formats(
+          config_path,
+          "",
+          spec,
+          config,
+          own,
+          !all,
+          forced,
+          options.value("sign_key"),
+          options.value("apk_key_name"),
+          out_dir,
+        )
+      } catch {
+        Failed(message) =>
+          if all {
+            // The other packagers still get their turn.
+            // The same complaint about the whole file is printed once.
+            let text = message.replace_all(old=config_path + ": ", new="")
+            if !printed.contains(text) {
+              printed.push(text)
+              eprintln("linuxpkg: \{own}: \{message}")
+            }
+            failures.push(own)
+          } else {
+            raise Failed(message)
+          }
+        other => raise other
+      } noraise {
+        _ => ()
+      }
+    }
+    if failures.length() > 0 {
+      raise Failed("no package for \{failures.join(", ")}")
+    }
+  } else {
+    let (spec, config) = load_spec(
+      config_path,
+      allow_arch_mismatch=allow_mismatch,
+    )
+    build_formats(
+      config_path,
+      dirname(config_path),
+      spec,
+      config,
+      format,
+      format != "all",
+      forced,
+      options.value("sign_key"),
+      options.value("apk_key_name"),
+      out_dir,
+    )
+  }
+  0
+}
+
+///|
+/// Write the packages of `format` (`deb`, `rpm`, `arch`, `apk`, or `all`).
+/// With `strict` a package that does not fit its format (no Arch Linux port
+/// for the architecture, ...) is an error; otherwise it is skipped with a note.
+/// `base` is the directory of the configuration, which `sign_key` is relative to.
+fn build_formats(
+  config_path : String,
+  base : String,
+  spec : @spec.PackageSpec,
+  config : @spec.Config,
+  format : String,
+  strict : Bool,
+  forced : @compress.Compression?,
+  sign_option : String?,
+  key_name_option : String?,
+  out_dir : String,
+) -> Unit raise CliError {
   // --sign-key wins over "sign_key" in the configuration, whose path is
   // relative to the configuration file.
-  let key_path = match (options.value("sign_key"), config.sign_key) {
+  let key_path = match (sign_option, config.sign_key) {
     (Some(path), _) => Some(path)
-    (None, Some(path)) => Some(join_path(dirname(config_path), path))
+    (None, Some(path)) => Some(join_path(base, path))
     (None, None) => None
   }
   let key = match key_path {
     Some(path) => Some(load_signing_key(path))
     None => None
   }
-  let key_name = match (options.value("apk_key_name"), config.apk_key_name) {
+  let key_name = match (key_name_option, config.apk_key_name) {
     (Some(name), _) => Some(name)
     (None, Some(name)) => Some(name)
     (None, None) => None
-  }
-  let out_dir = match options.value("out") {
-    Some(dir) => dir
-    None => ""
   }
   ensure_dir(out_dir)
   if format == "deb" || format == "all" {
@@ -143,7 +319,7 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
     // be a number); a package that does not is skipped with a note.
     try @arch.build(spec, compression~) catch {
       err =>
-        if format == "arch" {
+        if strict {
           raise Failed("\{config_path}: \{err}")
         } else {
           eprintln("linuxpkg: no Arch Linux package: \{err}")
@@ -173,7 +349,7 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
     // apk packages are always gzip, so --compression does not apply.
     try @apk.build(spec) catch {
       err =>
-        if format == "apk" {
+        if strict {
           raise Failed("\{config_path}: \{err}")
         } else {
           eprintln("linuxpkg: no Alpine Linux package: \{err}")
@@ -186,7 +362,7 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
           Some(k) =>
             if k.is_rsa() {
               Some(k)
-            } else if format == "apk" {
+            } else if strict {
               raise Failed(
                 "apk packages can only be signed with an RSA key, \{key_path.unwrap()} is an Ed25519 key",
               )
@@ -216,5 +392,4 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
       }
     }
   }
-  0
 }

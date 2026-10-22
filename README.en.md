@@ -31,6 +31,10 @@ cargo-deb (Rust).
   maintainer scripts, reproducible `mtime` / `SOURCE_DATE_EPOCH`.
 * `linuxpkg init --moon` writes the configuration for the native executable of a MoonBit project (the architecture of an
   already built binary is used).
+* nFPM configurations: `linuxpkg build nfpm.yaml` and `linuxpkg convert nfpm.yaml` read the file (overrides per packager,
+  environment variables, version splitting, globs and trees, per-format sections); what is not supported is named in a warning. CI
+  builds 29 nFPM acceptance configurations with the real nFPM and with linuxpkg and compares the packages
+  ([docs/nfpm.md](docs/nfpm.md)).
 * ELF detection (a small ELF reader in MoonBit, 32/64 bit, both byte orders): `build` refuses an arm64 program in an amd64 package
   (a warning for `all` packages, `--allow-arch-mismatch` to override), and `linuxpkg elf` / `inspect` show the CPU, static or
   dynamic linking, the interpreter and the needed libraries; the results match `readelf` for nine architectures.

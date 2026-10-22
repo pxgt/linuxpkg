@@ -81,12 +81,17 @@ built for with `arch`. This stops the most common packaging accident: an arm64 p
 `DT_NEEDED`, `DT_SONAME`), and `inspect` shows the same line under every ELF file of a package; with `--json` each file has an `elf`
 object (`null` for other files). `init --moon` uses the architecture of the binary when it is already built.
 
+## nFPM files
+
+`build` and `convert` also read an nFPM configuration (`nfpm.yaml`), see [nfpm.md](nfpm.md).
+
 ## Command line
 
 ```
 linuxpkg build <config.json> [--format deb|rpm|arch|apk|all] [--compression none|gzip|xz|zstd] [--sign-key KEY] [--apk-key-name N] [--allow-arch-mismatch] [--out DIR]
 linuxpkg inspect <file.deb|file.rpm> [--json]
 linuxpkg elf <file> [--json]
+linuxpkg convert <nfpm.yaml> [--format deb|rpm|apk|arch] [-o linuxpkg.json]
 linuxpkg verify  <package|repository dir> [--keyring KEY]
 linuxpkg repo   <dir> [--format deb|rpm|all] [--sign-key KEY]
 linuxpkg key apk-pub|info <private key> [--name NAME] [--out DIR]

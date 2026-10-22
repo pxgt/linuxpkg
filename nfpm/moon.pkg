@@ -1,0 +1,8 @@
+import {
+  "Xpeng/linuxpkg/elf",
+  "moonbitstack/moonyaml" @yaml,
+}
+
+import {
+  "Xpeng/linuxpkg/spec",
+} for "test"
