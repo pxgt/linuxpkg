@@ -9,14 +9,14 @@ moon test --target wasm-gc     # also: js, wasm
 moon test --target native      # Linux or WSL (Windows needs MSVC for native)
 ```
 
-179 tests, including fixed-byte expectations, archives written by GNU tar, GNU cpio, `dpkg-deb` and `rpmbuild`
+453 tests on every backend (property tests with a fixed-seed generator for tar, ar, cpio, rpm headers and compression; signature tests with golden values that make the four backends prove they write the same bytes), including fixed-byte expectations, archives written by GNU tar, GNU cpio, `dpkg-deb` and `rpmbuild`
 (fixtures under `*/fixtures_test.mbt`), and hostile input: every truncation and every flipped byte of a valid
 tar, ar, cpio, deb and rpm must produce a value or a typed error, never a crash.
 
 ## Coverage
 
 ```sh
-python tools/check_core_coverage.py --minimum 80
+python tools/check_core_coverage.py --minimum 90
 ```
 
 Runs the instrumented tests and prints line coverage per core package; CI enforces the floor.
@@ -100,13 +100,29 @@ tools/oracle/make_tar_fixtures.sh    # GNU tar: ustar, pax and gnu formats
 tools/oracle/make_cpio_fixtures.sh   # GNU cpio
 tools/oracle/make_deb_fixtures.sh    # dpkg-deb, gzip, xz and zstd
 tools/oracle/make_rpm_fixtures.sh    # rpmbuild, gzip, xz and zstd
+tools/oracle/make_sign_fixtures.sh   # throw-away OpenPGP test keys (testdata/sign/) and gpg's signatures over a fixed text
 tools/oracle/make_compress_fixtures.sh   # xz (several checks, blocks, streams), lzma, zstd (levels, streaming), gzip
 ```
 
 Each script rewrites the matching `fixtures_test.mbt` and must be run on Linux with the real tools.
 
+## Signatures, repositories and the browser build
+
+`tools/oracle/run.sh` also checks, with the real tools: `gpgv` on `InRelease`, `Release.gpg` and `repomd.xml.asc`; apt with
+`signed-by` and a changed `Release` refused; `rpm -Kv` on signed rpm packages and `rpm -K` refusing a changed header;
+`rpmsign`'s signature verified by `linuxpkg verify --keyring`; `gpgv` on Arch `.sig` files; apk-tools installing a signed
+package from a key directory without `--allow-untrusted`, `openssl dgst -sha256 -verify` on the apk signature, an
+abuild-style SHA-1 package; `APKINDEX.tar.gz` compared with `apk index`; and `tools/assemble_site.sh` building the four
+signed repositories for two architectures. `tools/oracle/containers.sh` repeats the installs in the distribution
+containers (apt `signed-by`, dnf `gpgcheck=1` and `repo_gpgcheck=1`, pacman `Required DatabaseRequired`, apk without
+`--allow-untrusted`), compares the pacman databases with `repo-add` and the apk index with `apk index`, and checks that
+changed or unsigned packages are refused. `tools/web_smoke.js` runs the browser build under Node and compares it with
+the command line (same package bytes, same `inspect` JSON).
+
 ## CI
 
-`.github/workflows/ci.yml` has three jobs: **verify** (fmt, interface drift, check with warnings denied, build and
+`.github/workflows/ci.yml` has four jobs: **verify** (fmt, interface drift, check with warnings denied, build and
 test on wasm-gc, wasm, js and native, CLI packages identical across backends, coverage floor, `moon package`),
-**oracle** (`tools/oracle/run.sh`) and **containers** (`tools/oracle/containers.sh`).
+**oracle** (`tools/oracle/run.sh`), **containers** (`tools/oracle/containers.sh`) and **action** (the GitHub Action run on the binary just built).
+`pages.yml` publishes the site and the signed repositories and installs linuxpkg from them over https in six containers;
+`release.yml` builds the release files and installs them in containers.
