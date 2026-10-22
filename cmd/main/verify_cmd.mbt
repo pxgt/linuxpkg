@@ -93,6 +93,14 @@ fn read_optional(path : String) -> Bytes? raise CliError {
 }
 
 ///|
+/// An `APKINDEX.tar.gz` with a signature stream in front of the index.
+fn is_signed_index(data : Bytes) -> Bool {
+  try @compress.gzip_members(data[:], max_size=1 << 28).length() == 2 catch {
+    _ => false
+  }
+}
+
+///|
 /// Check the signatures of an apt flat repository and a dnf repository in
 /// `dir`. Without a keyring only report which signature files are there.
 fn verify_repository(
@@ -111,8 +119,41 @@ fn verify_repository(
       yum.push((name, data))
     }
   }
-  if apt.length() == 0 && yum.length() == 0 {
-    raise Failed("\"\{dir}\" has no apt or dnf repository metadata")
+  // Alpine: one directory per architecture with an APKINDEX.tar.gz.
+  let apk : Array[(String, Bytes)] = []
+  // pacman: <name>.db.tar.gz and friends, with the .sig files next to them.
+  let pacman : Array[(String, Bytes)] = []
+  let pacman_names : Array[String] = []
+  let listing = @fs.read_dir(dir) catch {
+    err => raise Failed(describe_io(err, "cannot list \"\{dir}\""))
+  }
+  for name in listing {
+    let sub_index = join_path(join_path(dir, name), "APKINDEX.tar.gz")
+    if read_optional(sub_index) is Some(data) {
+      apk.push(("\{name}/APKINDEX.tar.gz", data))
+    }
+    if name.has_suffix(".db.tar.gz") {
+      pacman_names.push(name[0:name.length() - 10].to_owned())
+    }
+  }
+  for repo_name in pacman_names {
+    for
+      suffix in [
+        ".db", ".db.tar.gz", ".files", ".files.tar.gz", ".db.sig", ".db.tar.gz.sig",
+        ".files.sig", ".files.tar.gz.sig",
+      ] {
+      if read_optional(join_path(dir, repo_name + suffix)) is Some(data) {
+        pacman.push((repo_name + suffix, data))
+      }
+    }
+  }
+  if apt.length() == 0 &&
+    yum.length() == 0 &&
+    apk.length() == 0 &&
+    pacman.length() == 0 {
+    raise Failed(
+      "\"\{dir}\" has no apt, dnf, pacman or apk repository metadata",
+    )
   }
   let problems : Array[String] = []
   if apt.length() > 0 {
@@ -157,6 +198,50 @@ fn verify_repository(
         } else {
           println("\{dir}: dnf: unsigned")
         }
+    }
+  }
+  if apk.length() > 0 {
+    match keyring {
+      Some(ring) => {
+        let found = @repo.check_apk_signature(apk, ring)
+        if found.length() == 0 {
+          println(
+            "\{dir}: apk: APKINDEX.tar.gz of \{apk.length()} architecture(s) OK",
+          )
+        }
+        for problem in found {
+          problems.push("apk: \{problem}")
+        }
+      }
+      None => {
+        let signed = apk.filter(f => is_signed_index(f.1))
+        println(
+          "\{dir}: apk: \{signed.length()} of \{apk.length()} index(es) signed, not checked, no --keyring",
+        )
+      }
+    }
+  }
+  for repo_name in pacman_names {
+    match keyring {
+      Some(ring) => {
+        let found = @repo.check_arch_signature(pacman, ring, name=repo_name)
+        if found.length() == 0 {
+          println("\{dir}: pacman: \{repo_name}.db and .files OK")
+        }
+        for problem in found {
+          problems.push("pacman: \{problem}")
+        }
+      }
+      None => {
+        let signed = pacman.filter(f => f.0 == repo_name + ".db.sig")
+        println(
+          if signed.length() > 0 {
+            "\{dir}: pacman: \{repo_name}.db signed, not checked, no --keyring"
+          } else {
+            "\{dir}: pacman: \{repo_name}.db unsigned"
+          },
+        )
+      }
     }
   }
   if problems.length() > 0 {

@@ -1,10 +1,15 @@
 import {
+  "Xpeng/linuxpkg/apk",
+  "Xpeng/linuxpkg/arch",
+  "Xpeng/linuxpkg/archive/tar",
   "Xpeng/linuxpkg/compress",
   "Xpeng/linuxpkg/deb",
   "Xpeng/linuxpkg/rpm",
   "Xpeng/linuxpkg/sign",
   "moonbitlang/x/crypto",
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/encoding/base64",
+  "moonbitlang/core/string",
 }
 
 import {

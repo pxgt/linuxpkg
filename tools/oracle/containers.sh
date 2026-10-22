@@ -638,6 +638,128 @@ PY
   docker run --rm -v "$dir:/out" alpine:3.20 sh -c 'rm -rf /out/*'
 }
 
+# ---- Arch and Alpine repositories: pacman -Sy / apk --repository against what linuxpkg repo writes
+arch_repo() {
+  step "archlinux:latest: pacman -Sy / -S from the generated repository, databases equal repo-add's, signed one needs the key"
+  local d="$WORK/arch-repo"
+  mkdir -p "$d/plain" "$d/signed" "$d/keys"
+  local k=rsa2048
+  "$BIN" build examples/hello/linuxpkg.json --format arch --out "$d/plain" >/dev/null
+  "$BIN" build "$WORK/demo/linuxpkg.json" --format arch --out "$d/plain" >/dev/null
+  "$BIN" repo "$d/plain" --format arch --name demo >/dev/null
+  cp "$d"/plain/*.pkg.tar.* "$d/signed/"
+  "$BIN" build examples/hello/linuxpkg.json --format arch --out "$d/signed" --sign-key "testdata/sign/test-only-$k.sec.asc" >/dev/null
+  "$BIN" build "$WORK/demo/linuxpkg.json" --format arch --out "$d/signed" --sign-key "testdata/sign/test-only-$k.sec.asc" >/dev/null
+  "$BIN" repo "$d/signed" --format arch --name demo --sign-key "testdata/sign/test-only-$k.sec.asc" >/dev/null
+  "$BIN" verify "$d/signed" --keyring "testdata/sign/test-only-$k.pub.asc"
+  cp "testdata/sign/test-only-$k.pub.asc" "$d/keys/key.asc"
+  local fpr
+  fpr="$(awk -v k="$k" '$1==k {print $2}' testdata/sign/fingerprints.txt)"
+  chmod -R a+rwX "$d"
+  docker run --rm -e "FPR=$fpr" -v "$d:/work" archlinux:latest bash -ec '
+    sed -i "/^NoExtract/d" /etc/pacman.conf
+    # The databases equal what repo-add writes for the same packages.
+    mkdir -p /tmp/ref && cp /work/plain/*.pkg.tar.* /tmp/ref/
+    cd /tmp/ref
+    repo-add demo.db.tar.gz *.pkg.tar.zst >/dev/null
+    for kind in db files; do
+      mkdir -p /tmp/ref-$kind /tmp/our-$kind
+      bsdtar -xf /tmp/ref/demo.$kind.tar.gz -C /tmp/ref-$kind
+      bsdtar -xf /work/plain/demo.$kind.tar.gz -C /tmp/our-$kind
+      (cd /tmp/ref-$kind && find . -type f | sort | xargs sha256sum) > /tmp/ref-$kind.sums
+      (cd /tmp/our-$kind && find . -type f | sort | xargs sha256sum) > /tmp/our-$kind.sums
+      if [ "$(cat /tmp/ref-$kind.sums)" != "$(cat /tmp/our-$kind.sums)" ]; then
+        echo "the $kind database differs from repo-add"; cat /tmp/ref-$kind.sums /tmp/our-$kind.sums
+        for f in $(cd /tmp/ref-$kind && find . -type f | sort); do echo "--- $f"; od -c /tmp/ref-$kind/$f | tail -n 12; echo "+++"; od -c /tmp/our-$kind/$f | tail -n 12; done
+        exit 1
+      fi
+      echo "  ok: demo.$kind.tar.gz has the same entries as repo-add writes"
+    done
+    # pacman uses the generated repository.
+    cat >> /etc/pacman.conf <<CONF
+[demo]
+SigLevel = Optional TrustAll
+Server = file:///work/plain
+CONF
+    pacman -Sy
+    pacman -Sl demo
+    pacman -S --noconfirm hello linuxpkg-demo
+    test "$(hello)" = "hello from linuxpkg"
+    test "$(linuxpkg-demo)" = "demo from linuxpkg"
+    pacman -Qkk hello
+    pacman -R --noconfirm hello linuxpkg-demo
+    # The signed repository: database and packages must carry a trusted signature.
+    pacman-key --init
+    pacman-key --add /work/keys/key.asc
+    pacman-key --lsign-key "$FPR"
+    sed -i "/^\[demo\]/,\$d" /etc/pacman.conf
+    cat >> /etc/pacman.conf <<CONF
+[demo]
+SigLevel = Required DatabaseRequired
+Server = file:///work/signed
+CONF
+    pacman -Sy
+    pacman -S --noconfirm hello linuxpkg-demo
+    test "$(hello)" = "hello from linuxpkg"
+    pacman -R --noconfirm hello linuxpkg-demo
+    # A database changed after signing is refused.
+    cp -r /work/signed /tmp/bad
+    printf "x" >> /tmp/bad/demo.db
+    sed -i "s#file:///work/signed#file:///tmp/bad#" /etc/pacman.conf
+    rm -f /var/lib/pacman/sync/demo.db*
+    if pacman -Sy >/tmp/bad.txt 2>&1; then cat /tmp/bad.txt; echo "pacman accepted a changed database"; exit 1; fi
+    cat /tmp/bad.txt
+    grep -qiE "signature|invalid or corrupted" /tmp/bad.txt
+    echo "pacman repository check passed on $(. /etc/os-release && echo "$PRETTY_NAME")"
+  '
+  docker run --rm -v "$d:/work" archlinux:latest sh -c 'rm -rf /work/*'
+}
+
+apk_repo() {
+  step "alpine:3.20: apk --repository against the generated repository, unsigned and signed"
+  local d="$WORK/apk-repo"
+  mkdir -p "$d/plain" "$d/signed" "$d/keys"
+  local secret=testdata/sign/test-only-rsa2048.sec.asc
+  "$BIN" build examples/hello/linuxpkg.json --format apk --out "$d/plain" >/dev/null
+  "$BIN" build "$WORK/demo/linuxpkg.json" --format apk --out "$d/plain" >/dev/null
+  cp "$d"/plain/*.apk "$d/signed/"
+  "$BIN" repo "$d/plain" --format apk --name "linuxpkg test" >/dev/null
+  "$BIN" repo "$d/signed" --format apk --name "linuxpkg test" --sign-key "$secret" --apk-key-name linuxpkg-test.rsa.pub >/dev/null
+  "$BIN" key apk-pub "$secret" --name linuxpkg-test --out "$d/keys" >/dev/null
+  chmod -R a+rwX "$d"
+  docker run --rm -v "$d:/work" alpine:3.20 sh -ec '
+    # The index is what apk index writes for the same packages.
+    mkdir -p /tmp/ref && cp /work/plain/x86_64/*.apk /tmp/ref/ && cd /tmp/ref
+    apk index --allow-untrusted -d "linuxpkg test" -o APKINDEX.tar.gz *.apk >/dev/null
+    mkdir -p /tmp/ref-x /tmp/our-x
+    tar -xzf /tmp/ref/APKINDEX.tar.gz -C /tmp/ref-x
+    tar -xzf /work/plain/x86_64/APKINDEX.tar.gz -C /tmp/our-x
+    diff -r /tmp/ref-x /tmp/our-x || { echo "APKINDEX differs from apk index"; exit 1; }
+    echo "  ok: APKINDEX has the same content as apk index writes"
+    # Unsigned repository.
+    apk add --allow-untrusted --repository /work/plain hello linuxpkg-demo
+    test "$(hello)" = "hello from linuxpkg"
+    test "$(linuxpkg-demo)" = "demo from linuxpkg"
+    apk del hello linuxpkg-demo
+    if apk add --repository /work/plain hello >/tmp/untrusted.txt 2>&1; then cat /tmp/untrusted.txt; echo "apk used an unsigned index"; exit 1; fi
+    cat /tmp/untrusted.txt
+    grep -q "UNTRUSTED" /tmp/untrusted.txt
+    # Signed repository, key in /etc/apk/keys, no --allow-untrusted.
+    cp /work/keys/linuxpkg-test.rsa.pub /etc/apk/keys/
+    apk add --repository /work/signed hello linuxpkg-demo
+    test "$(hello)" = "hello from linuxpkg"
+    test "$(linuxpkg-demo)" = "demo from linuxpkg"
+    apk del hello linuxpkg-demo
+    # A changed index is refused.
+    cp -r /work/signed /tmp/bad
+    printf "x" >> /tmp/bad/x86_64/APKINDEX.tar.gz
+    if apk add --repository /tmp/bad hello >/tmp/bad.txt 2>&1; then cat /tmp/bad.txt; echo "apk used a changed index"; exit 1; fi
+    cat /tmp/bad.txt
+    echo "apk repository check passed on $(. /etc/os-release && echo "$PRETTY_NAME")"
+  '
+  docker run --rm -v "$d:/work" alpine:3.20 sh -c 'rm -rf /work/*'
+}
+
 run_deb debian:12
 run_deb ubuntu:24.04
 run_rpm fedora:41
@@ -648,6 +770,8 @@ arch_real
 apk_check
 signed_apk
 apk_real
+arch_repo
+apk_repo
 repo_deb debian:12
 repo_deb ubuntu:24.04
 repo_rpm fedora:41
