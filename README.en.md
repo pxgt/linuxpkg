@@ -66,7 +66,7 @@ The official tools are the judges (`tools/oracle/run.sh` on every push, `tools/o
 
 ## Quality
 
-453 tests on every backend, 92.7 % line coverage of the core packages (CI floor 90 %), zero warnings, public interface files
+453 tests on every backend, 92.8 % line coverage of the core packages (CI floor 90 %), zero warnings, public interface files
 checked in CI. Honest limits: the pure-MoonBit zstd encoder is much weaker than the official one (about 2.4 times the size of
 gzip on text) and xz is 18–22 % behind `xz -6`; there is no bzip2; encrypted private keys are refused; Alpine signatures are RSA
 only because apk only knows RSA. See [docs/formats.md](docs/formats.md) and [docs/performance.md](docs/performance.md).

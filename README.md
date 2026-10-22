@@ -165,7 +165,7 @@ linuxpkg init --moon .                           # 为当前 MoonBit 项目生�
 ## 质量数字
 
 - 测试：453 个，wasm-gc、wasm、js、native 四个后端全部通过（含 tar / ar / cpio / rpm 头 / 压缩的随机输入"写出再读回"属性测试、签名的可复现与篡改测试、命令行端到端测试）。
-- 核心包行覆盖率 **92.7%**（spec 97.0%、tar 97.8%、ar 96.4%、cpio 100%、deb 95.6%、rpm 94.2%、compress 93.3%、repo 88.7%、arch 91.5%、apk 89.8%、sign 88.3%），CI 强制不低于 90%（`tools/check_core_coverage.py`）。
+- 核心包行覆盖率 **92.8%**（spec 97.4%、tar 97.8%、ar 96.4%、cpio 100%、deb 95.8%、rpm 94.2%、compress 93.3%、repo 88.9%、arch 91.5%、apk 89.8%、sign 88.3%），CI 强制不低于 90%（`tools/check_core_coverage.py`）。
 - 恶意输入：tar、ar、cpio、deb、rpm 的每一种截断和每个字节翻转（gzip / xz / zstd / 不压缩各测一遍）都只会得到结果或明确的错误，不会崩溃；
   gzip、xz、zstd 炸弹都被 1 GiB 默认上限截住（xz 和 zstd 在解压前就从块头 / 帧头算出解压后大小）。
 
