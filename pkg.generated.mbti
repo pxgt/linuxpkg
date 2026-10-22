@@ -2,7 +2,7 @@
 package "Xpeng/linuxpkg"
 
 // Values
-pub const VERSION : String = "0.3.1"
+pub const VERSION : String = "0.4.0"
 
 // Errors
 

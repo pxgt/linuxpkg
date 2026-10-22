@@ -33,7 +33,7 @@ jobs:
           moon build --target native --release
 
       - name: Build and sign the packages
-        uses: pxgt/linuxpkg@v0.5.0
+        uses: pxgt/linuxpkg@v0.4.0
         with:
           config: linuxpkg.json
           format: all
