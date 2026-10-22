@@ -27,6 +27,10 @@ All notable changes are recorded here. The format follows
   `/etc/apk/keys/` (and `key info` shows a key), `verify --keyring` accepts that file; `apk add` installs without
   `--allow-untrusted`. Library: `apk.sign`, `apk.sign_index`, `SigningKey::rsa_sign`, `rsa_public_pem`,
   `PublicKeyring::from_pem`, `verify_rsa`.
+- `linuxpkg repo <dir>` also writes pacman databases (`--format arch --name NAME`: `NAME.db`, `NAME.files`, as `repo-add`)
+  and Alpine repositories (`--format apk`: `<arch>/APKINDEX.tar.gz` equal to `apk index`'s output, packages beside it),
+  signed with `--sign-key`; `verify <dir> --keyring KEY` checks them. `--format all` now includes both. Library:
+  `repo.arch_index`, `apk_index`, `sign_arch`, `sign_apk`, `check_arch*`, `check_apk*`.
 - Checked with `rpm -K`, `gpgv`, `rpmsign` (its signatures verify with `verify --keyring`), apt, dnf and pacman
   (`LocalFileSigLevel = Required`) in the Debian, Ubuntu, Fedora, openEuler and Arch containers, including changed
   and unsigned packages being refused.

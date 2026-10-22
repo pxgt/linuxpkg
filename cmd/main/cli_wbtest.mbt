@@ -265,17 +265,7 @@ test "repo writes apt and dnf metadata that the checks accept" {
   write_bytes(repo + "/broken.deb", b"nope")
   assert_eq(run(["repo", repo]), 1)
   @fs.remove_file(repo + "/broken.deb")
-  for name in @fs.read_dir(repo + "/repodata") {
-    @fs.remove_file(repo + "/repodata/" + name)
-  }
-  @fs.remove_dir(repo + "/repodata")
-  for name in @fs.read_dir(repo) {
-    @fs.remove_file(repo + "/" + name)
-  }
-  @fs.remove_dir(repo)
-  @fs.remove_file(dir + "/linuxpkg.json")
-  @fs.remove_file(dir + "/tool.sh")
-  @fs.remove_dir(dir)
+  remove_tree(dir)
 }
 
 ///|
@@ -425,21 +415,7 @@ test "repo --sign-key writes signatures that verify, and bad keys stop the comma
   assert_eq(run(["repo", repo, "--sign-key", dir + "/empty.asc"]), 1)
   assert_eq(run(["repo", repo, "--sign-key", dir + "/key.pub.asc"]), 1)
   assert_eq(run(["repo", repo, "--sign-key"]), 1)
-  for name in @fs.read_dir(repo + "/repodata") {
-    @fs.remove_file(repo + "/repodata/" + name)
-  }
-  @fs.remove_dir(repo + "/repodata")
-  for name in @fs.read_dir(repo) {
-    @fs.remove_file(repo + "/" + name)
-  }
-  @fs.remove_dir(repo)
-  for
-    name in [
-      "linuxpkg.json", "tool.sh", "key.asc", "key.pub.asc", "key.gpg", "empty.asc",
-    ] {
-    @fs.remove_file(dir + "/" + name)
-  }
-  @fs.remove_dir(dir)
+  remove_tree(dir)
 }
 
 ///|
@@ -723,5 +699,101 @@ test "apk signing: build --sign-key, key apk-pub, verify --keyring" {
     ]),
     1,
   )
+  remove_tree(dir)
+}
+
+///|
+test "repo writes Alpine and pacman repositories, signed or not" {
+  let dir = "cli_repoapk_tmp"
+  ensure_dir(dir)
+  write_bytes(dir + "/linuxpkg.json", @utf8.encode(CONFIG_JSON))
+  write_bytes(dir + "/tool.sh", b"#!/bin/sh\necho hi\n")
+  write_bytes(dir + "/rsa.asc", @utf8.encode(fx_rsa_secret))
+  write_bytes(dir + "/rsa.pub.asc", @utf8.encode(fx_rsa_public))
+  write_bytes(dir + "/ed.asc", @utf8.encode(fx_ed_secret))
+  write_bytes(dir + "/ed.pub.asc", @utf8.encode(fx_ed_public))
+  let repo = dir + "/repo"
+  assert_eq(run(["build", dir + "/linuxpkg.json", "--out", repo]), 0)
+  // Unsigned.
+  assert_eq(run(["repo", repo, "--format", "apk", "--name", "demo"]), 0)
+  for name in ["x86_64", "aarch64", "noarch"] {
+    assert_true(@fs.path_exists(repo + "/" + name + "/tinytool-1.0-r1.apk"))
+  }
+  assert_true(@fs.path_exists(repo + "/x86_64/APKINDEX.tar.gz"))
+  assert_eq(run(["repo", repo, "--format", "arch", "--name", "demo"]), 0)
+  for name in ["demo.db", "demo.db.tar.gz", "demo.files", "demo.files.tar.gz"] {
+    assert_true(@fs.path_exists(repo + "/" + name))
+  }
+  assert_eq(run(["verify", repo]), 0)
+  assert_eq(run(["verify", repo, "--keyring", dir + "/rsa.pub.asc"]), 2)
+  // Signed with an RSA key: everything verifies with that key and only that key.
+  assert_eq(
+    run([
+      "repo",
+      repo,
+      "--sign-key",
+      dir + "/rsa.asc",
+      "--name",
+      "demo",
+      "--apk-key-name",
+      "mine.rsa.pub",
+    ]),
+    0,
+  )
+  assert_true(@fs.path_exists(repo + "/demo.db.sig"))
+  assert_true(@fs.path_exists(repo + "/demo.files.tar.gz.sig"))
+  assert_eq(run(["verify", repo]), 0)
+  assert_eq(run(["verify", repo, "--keyring", dir + "/rsa.pub.asc"]), 0)
+  assert_eq(run(["verify", repo, "--keyring", dir + "/ed.pub.asc"]), 2)
+  let index_before = read_bytes(repo + "/x86_64/APKINDEX.tar.gz")
+  // Reproducible.
+  assert_eq(
+    run([
+      "repo",
+      repo,
+      "--sign-key",
+      dir + "/rsa.asc",
+      "--name",
+      "demo",
+      "--apk-key-name",
+      "mine.rsa.pub",
+    ]),
+    0,
+  )
+  assert_eq(read_bytes(repo + "/x86_64/APKINDEX.tar.gz"), index_before)
+  // The signed index is accepted as an index again, with its packages.
+  assert_eq(
+    run(["repo", repo, "--format", "apk", "--sign-key", dir + "/rsa.asc"]),
+    0,
+  )
+  // An Ed25519 key: pacman is signed, apk is left out (an error when asked for alone).
+  assert_eq(
+    run([
+      "repo",
+      repo,
+      "--sign-key",
+      dir + "/ed.asc",
+      "--format",
+      "arch",
+      "--name",
+      "demo",
+    ]),
+    0,
+  )
+  assert_eq(
+    run(["repo", repo, "--sign-key", dir + "/ed.asc", "--format", "apk"]),
+    1,
+  )
+  assert_eq(
+    run(["repo", repo, "--sign-key", dir + "/ed.asc", "--name", "demo"]),
+    0,
+  )
+  // Changed after signing.
+  write_bytes(repo + "/demo.db", b"changed")
+  assert_eq(run(["verify", repo, "--keyring", dir + "/ed.pub.asc"]), 2)
+  // Usage errors.
+  assert_eq(run(["repo", repo, "--format", "zip"]), 1)
+  assert_eq(run(["repo", repo, "--name"]), 1)
+  assert_eq(run(["repo", repo, "--format", "arch", "--name", "bad name"]), 1)
   remove_tree(dir)
 }

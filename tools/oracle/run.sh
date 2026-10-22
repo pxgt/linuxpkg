@@ -985,6 +985,44 @@ PY
     "$APK_TOOL" --keys-dir "$WORK/apk-otherkeys" --root "$WORK/apk-r4" --initdb --no-network --no-cache --no-scripts add "$WORK/apk-abuild.apk" >/dev/null 2>&1
     pass "apk accepts the same abuild-style package, so both agree on the format"
   fi
+  # ---- Alpine repository: APKINDEX.tar.gz as apk index writes it, installs through --repository
+  ARD="$WORK/apk-repo"
+  mkdir -p "$ARD/in" "$ARD/ref/x86_64"
+  SOURCE_DATE_EPOCH=1700000000 "$BIN" build "$EXAMPLE" --format apk --out "$ARD/in" >/dev/null
+  cp "$ARD/in/hello-1.0.0-r1.apk" "$ARD/ref/x86_64/"
+  (cd "$ARD/ref/x86_64" && SOURCE_DATE_EPOCH=1700000000 "$APK_TOOL" index --allow-untrusted -d "linuxpkg test" -o APKINDEX.tar.gz hello-1.0.0-r1.apk >/dev/null 2>&1)
+  SOURCE_DATE_EPOCH=1700000000 "$BIN" repo "$ARD/in" --format apk --name "linuxpkg test" >/dev/null
+  python3 - "$ARD/ref/x86_64/APKINDEX.tar.gz" "$ARD/in/x86_64/APKINDEX.tar.gz" <<'PY'
+import sys, zlib, tarfile, io
+def read(path):
+    d = zlib.decompressobj(31)
+    out = d.decompress(open(path, "rb").read())
+    t = tarfile.open(fileobj=io.BytesIO(out))
+    return [(m.name, m.mode, m.uid, m.gid, m.uname, m.gname, m.mtime, t.extractfile(m).read()) for m in t], len(out)
+ref, ours = read(sys.argv[1]), read(sys.argv[2])
+assert ref == ours, (ref, ours)
+print("  ok: APKINDEX.tar.gz has the same entries, metadata and content as `apk index` writes (%d bytes of tar)" % ref[1])
+PY
+  mkdir -p "$ARD/root"
+  "$APK_TOOL" --repository "$ARD/in" --allow-untrusted --root "$ARD/root" --initdb --no-cache --no-scripts add hello >"$WORK/apk-add.txt" 2>&1 || { cat "$WORK/apk-add.txt"; die "apk add hello from the generated repository failed"; }
+  expect_eq "apk installed hello from the generated repository" "$("$ARD/root/usr/bin/hello")" "hello from linuxpkg"
+  # Signed repository: trusted through the key directory.
+  SECRET="$ROOT/testdata/sign/test-only-rsa2048.sec.asc"
+  "$BIN" repo "$ARD/in" --format apk --sign-key "$SECRET" --apk-key-name test.rsa.pub >/dev/null
+  "$BIN" verify "$ARD/in" --keyring "$KEYSD/test.rsa.pub" | grep -q "apk: .*OK" && pass "verify --keyring accepts the signed Alpine repository"
+  rm -rf "$ARD/root2" && mkdir -p "$ARD/root2"
+  "$APK_TOOL" --keys-dir "$KEYSD" --repository "$ARD/in" --root "$ARD/root2" --initdb --no-cache --no-scripts add hello >"$WORK/apk-add.txt" 2>&1 || { cat "$WORK/apk-add.txt"; die "apk add from the signed repository failed"; }
+  expect_eq "apk installed hello from the signed repository without --allow-untrusted" "$("$ARD/root2/usr/bin/hello")" "hello from linuxpkg"
+  rm -rf "$ARD/root3" && mkdir -p "$ARD/root3"
+  if "$APK_TOOL" --keys-dir "$WORK/apk-nokeys" --repository "$ARD/in" --root "$ARD/root3" --initdb --no-cache --no-scripts add hello >"$WORK/apk-add.txt" 2>&1; then
+    cat "$WORK/apk-add.txt"; die "apk used an index it cannot trust"
+  fi
+  expect_in "apk calls the index untrusted without the key" "UNTRUSTED" "$(cat "$WORK/apk-add.txt")"
+  cp "$ARD/in/x86_64/APKINDEX.tar.gz" "$ARD/index.good"
+  printf 'x' >>"$ARD/in/x86_64/APKINDEX.tar.gz"
+  if "$BIN" verify "$ARD/in" --keyring "$KEYSD/test.rsa.pub" >/dev/null 2>&1; then die "verify accepted a changed index"; fi
+  pass "verify --keyring refuses a changed APKINDEX"
+  cp "$ARD/index.good" "$ARD/in/x86_64/APKINDEX.tar.gz"
 else
   echo "  apk is not installed, the install check is left to the container job"
 fi

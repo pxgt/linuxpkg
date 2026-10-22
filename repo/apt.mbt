@@ -122,17 +122,31 @@ fn check_name(file : PackageFile, suffix : String) -> Unit raise RepoError {
 }
 
 ///|
+/// Byte-wise (UTF-8) comparison of two texts, `-1`, `0` or `1`. The standard
+/// comparison of strings looks at the length first, which is no order for a
+/// list of file names.
+fn text_compare(a : String, b : String) -> Int32 {
+  let x = @utf8.encode(a)
+  let y = @utf8.encode(b)
+  let n = if x.length() < y.length() { x.length() } else { y.length() }
+  for i in 0..<n {
+    if x[i] != y[i] {
+      return if x[i] < y[i] { -1 } else { 1 }
+    }
+  }
+  if x.length() < y.length() {
+    -1
+  } else if x.length() > y.length() {
+    1
+  } else {
+    0
+  }
+}
+
+///|
 fn sorted_by_name(files : Array[PackageFile]) -> Array[PackageFile] {
   let copy = files.copy()
-  copy.sort_by((a, b) => {
-    if a.name < b.name {
-      -1
-    } else if a.name > b.name {
-      1
-    } else {
-      0
-    }
-  })
+  copy.sort_by((a, b) => text_compare(a.name, b.name))
   copy
 }
 
