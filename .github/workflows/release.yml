@@ -119,7 +119,10 @@ jobs:
 
   checksums:
     name: SHA256SUMS
-    needs: build
+    # Wait for the macOS build too, so that its file is in the list when it succeeds. It is optional: when
+    # it fails (continue-on-error) or is missing, the checksums are written for what exists.
+    needs: [build, macos]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Download the files
