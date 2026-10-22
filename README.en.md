@@ -87,3 +87,5 @@ Used by [moonthrift](https://github.com/pxgt/moonthrift), which builds its deb, 
 Format knowledge from google/rpmpack (Apache-2.0), nFPM (MIT), the Debian, rpm.org, Arch and Alpine documentation; signing
 building blocks from `justinwongcn/moonpgp`; compression from `moonbit-community/flate`, `Milky2018/zstd`, `lin2077-zeming/moonxz`
 and `aurora0x27/lzma-mbt`. See [THIRD_PARTY.md](THIRD_PARTY.md). Apache-2.0, see [LICENSE](LICENSE).
+
+The pull request to `justinwongcn/moonpgp` ([#2](https://github.com/justinwongcn/moonpgp/pull/2): support for flate 0.9.0 and a signature time that can be given, so that signatures are reproducible) was merged upstream on 2026-10-22.

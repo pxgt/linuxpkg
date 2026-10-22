@@ -196,6 +196,7 @@ linuxpkg init --moon .                           # 为当前 MoonBit 项目生�
 - MoonBit 生态里已有 [`xmyd0915/moonar`](https://mooncakes.io/docs/xmyd0915/moonar)（ar 归档）和
   [`oilleelssq-wq/moon-cpio`](https://mooncakes.io/docs/oilleelssq-wq/moon-cpio)（cpio 归档）两个底层零件。
   linuxpkg 自己实现了 ar / tar / cpio，是为了完全控制确定性输出，并让归档格式与打包逻辑一起被官方工具验证；对这两个项目表示尊重。
+- 给 [justinwongcn/moonpgp](https://github.com/justinwongcn/moonpgp) 提的 [PR #2](https://github.com/justinwongcn/moonpgp/pull/2)（适配 flate 0.9.0，签名时间可指定以便复现）已于 2026-10-22 被上游合并。
 - 配置字段命名参考 [nFPM](https://github.com/goreleaser/nfpm)（MIT），并且能直接读它的配置文件（[docs/nfpm.md](docs/nfpm.md)）；CI 里用真 nFPM 做逐项对照。
 - rpm 的头部布局、tag 与不可变区域参考 [google/rpmpack](https://github.com/google/rpmpack)（Apache-2.0）的格式知识，以 rpm 官方工具的实测结果为准，用 MoonBit 重新实现，没有复制代码。
 - 压缩算法来自三个现成的 MoonBit 库：gzip 用 [moonbit-community/flate](https://mooncakes.io/docs/moonbit-community/flate)，
