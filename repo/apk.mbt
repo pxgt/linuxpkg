@@ -9,8 +9,18 @@ fn apk_checksum(pkg : @apk.ApkPackage) -> String {
 ///|
 fn line(out : StringBuilder, key : String, value : String?) -> Unit {
   match value {
-    Some(text) if text != "" => out.write_string("\{key}:\{text}\n")
+    Some(text) => out.write_string("\{key}:\{text}\n")
     _ => ()
+  }
+}
+
+///|
+/// The values joined by spaces, or nothing if there are none.
+fn joined(values : Array[String]) -> String? {
+  if values.is_empty() {
+    None
+  } else {
+    Some(values.join(" "))
   }
 }
 
@@ -44,9 +54,9 @@ fn apk_stanza(
   line(out, "t", pkg.field("builddate"))
   line(out, "c", pkg.field("commit"))
   line(out, "k", pkg.field("provider_priority"))
-  line(out, "D", Some(pkg.fields("depend").join(" ")))
-  line(out, "p", Some(pkg.fields("provides").join(" ")))
-  line(out, "i", Some(pkg.fields("install_if").join(" ")))
+  line(out, "D", joined(pkg.fields("depend")))
+  line(out, "p", joined(pkg.fields("provides")))
+  line(out, "i", joined(pkg.fields("install_if")))
   out.write_char('\n')
   out.to_string()
 }
