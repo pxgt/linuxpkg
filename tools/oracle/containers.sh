@@ -666,7 +666,13 @@ arch_repo() {
       mkdir -p /tmp/ref-$kind /tmp/our-$kind
       bsdtar -xf /tmp/ref/demo.$kind.tar.gz -C /tmp/ref-$kind
       bsdtar -xf /work/plain/demo.$kind.tar.gz -C /tmp/our-$kind
-      diff -r /tmp/ref-$kind /tmp/our-$kind || { echo "the $kind database differs from repo-add"; exit 1; }
+      (cd /tmp/ref-$kind && find . -type f | sort | xargs sha256sum) > /tmp/ref-$kind.sums
+      (cd /tmp/our-$kind && find . -type f | sort | xargs sha256sum) > /tmp/our-$kind.sums
+      if [ "$(cat /tmp/ref-$kind.sums)" != "$(cat /tmp/our-$kind.sums)" ]; then
+        echo "the $kind database differs from repo-add"; cat /tmp/ref-$kind.sums /tmp/our-$kind.sums
+        for f in $(cd /tmp/ref-$kind && find . -type f | sort); do echo "--- $f"; cat /tmp/ref-$kind/$f; echo "+++"; cat /tmp/our-$kind/$f; done
+        exit 1
+      fi
       echo "  ok: demo.$kind.tar.gz has the same entries as repo-add writes"
     done
     # pacman uses the generated repository.
