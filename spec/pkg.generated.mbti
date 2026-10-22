@@ -74,9 +74,11 @@ pub(all) struct Config {
   pacman : FormatOptions
   sign_key : String?
   apk_key_name : String?
+  allow_arch_mismatch : Bool
 } derive(Eq, @debug.Debug)
 pub fn Config::arch_compression(Self) -> @compress.Compression
 pub fn Config::deb_compression(Self) -> @compress.Compression
+pub fn Config::elf_warnings(Self, Map[String, Bytes]) -> Array[String]
 pub fn Config::parse(String) -> Self raise SpecError
 pub fn Config::resolve(Self, Map[String, Bytes], default_mtime? : Int64) -> PackageSpec raise SpecError
 pub fn Config::rpm_compression(Self) -> @compress.Compression

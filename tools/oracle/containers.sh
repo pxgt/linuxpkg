@@ -760,10 +760,27 @@ apk_repo() {
   docker run --rm -v "$d:/work" alpine:3.20 sh -c 'rm -rf /work/*'
 }
 
+elf_real() { # image path...
+  local image="$1"; shift
+  step "$image: the ELF reader against readelf on the binaries of the image"
+  local d="$WORK/elf-$(echo "$image" | tr '/:' '__')"
+  mkdir -p "$d"
+  local p
+  for p in "$@"; do
+    docker run --rm "$image" cat "$p" > "$d/$(basename "$p")" || die "cannot read $p in $image"
+  done
+  python3 tools/elf/compare_readelf.py "$BIN" "$d"/* || die "linuxpkg elf and readelf disagree on a binary of $image"
+}
+
 run_deb debian:12
 run_deb ubuntu:24.04
 run_rpm fedora:41
 arch_check
+elf_real debian:12 /bin/ls /usr/bin/perl /lib/x86_64-linux-gnu/libc.so.6
+elf_real ubuntu:24.04 /bin/ls /usr/bin/perl
+elf_real fedora:41 /usr/bin/ls /usr/bin/bash
+elf_real archlinux:latest /usr/bin/ls /usr/bin/bash
+elf_real alpine:3.20 /bin/busybox
 signed_arch rsa2048
 signed_arch ed25519
 arch_real

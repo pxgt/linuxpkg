@@ -5,3 +5,7 @@
 *.cpio binary
 *.tar binary
 *.ar binary
+
+testdata/elf/* binary
+testdata/elf/*.c text
+testdata/elf/*.md text

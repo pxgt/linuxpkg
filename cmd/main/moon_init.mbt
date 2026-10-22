@@ -203,9 +203,34 @@ fn init_moon(options : Options) -> Int32 raise CliError {
   } else {
     package_dir
   }
-  let arch = match options.value("arch") {
-    Some(arch) => arch
-    None => "amd64"
+  // The architecture of a binary that is already built wins over the default:
+  // an arm64 build must not be packaged as amd64.
+  let built_arch : String? = if @fs.path_exists(join_path(dir, built)) {
+    try @elf.parse(read_bytes(join_path(dir, built))[:]) catch {
+      _ => None
+    } noraise {
+      info => info.arch()
+    }
+  } else {
+    None
+  }
+  let arch = match (options.value("arch"), built_arch) {
+    (Some(arch), Some(found)) => {
+      let same = try @spec.Arch::parse(arch) == @spec.Arch::parse(found) catch {
+        _ => true
+      } noraise {
+        equal => equal
+      }
+      if !same {
+        eprintln(
+          "linuxpkg: warning: \"\{built}\" is built for \{found}, but --arch says \{arch}; `build` will refuse this unless allow_arch_mismatch is set",
+        )
+      }
+      arch
+    }
+    (Some(arch), None) => arch
+    (None, Some(found)) => found
+    (None, None) => "amd64"
   }
   let version = fields.get("version").unwrap_or("0.1.0")
   let description = fields.get("description").unwrap_or(name)

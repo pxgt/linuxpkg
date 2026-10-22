@@ -20,6 +20,7 @@ flowchart TB
     apk["apk"]
     repo["repo<br/>apt, dnf, pacman, apk indexes"]
     sign["sign<br/>OpenPGP, RSA PKCS#1"]
+    elf["elf<br/>ELF headers: CPU, linking, libraries"]
   end
   subgraph base["Foundations"]
     spec["spec<br/>package model, config, validation"]
@@ -32,10 +33,11 @@ flowchart TB
   cli --> deb & rpm & arch & apk & repo & sign
   web --> deb & rpm & arch & apk & sign
   action --> cli
-  deb --> spec & tar & ar & compress
-  rpm --> spec & cpio & compress & sign
-  arch --> spec & tar & compress
-  apk --> spec & tar & compress & sign
+  deb --> spec & tar & ar & compress & elf
+  rpm --> spec & cpio & compress & sign & elf
+  arch --> spec & tar & compress & elf
+  apk --> spec & tar & compress & sign & elf
+  spec --> elf
   repo --> deb & rpm & arch & apk & sign & compress
   spec --> compress
 ```

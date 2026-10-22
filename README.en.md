@@ -29,7 +29,11 @@ cargo-deb (Rust).
 
 * One JSON configuration (field names follow nFPM): files, directories, symlinks, config files, owners, modes, dependencies,
   maintainer scripts, reproducible `mtime` / `SOURCE_DATE_EPOCH`.
-* `linuxpkg init --moon` writes the configuration for the native executable of a MoonBit project.
+* `linuxpkg init --moon` writes the configuration for the native executable of a MoonBit project (the architecture of an
+  already built binary is used).
+* ELF detection (a small ELF reader in MoonBit, 32/64 bit, both byte orders): `build` refuses an arm64 program in an amd64 package
+  (a warning for `all` packages, `--allow-arch-mismatch` to override), and `linuxpkg elf` / `inspect` show the CPU, static or
+  dynamic linking, the interpreter and the needed libraries; the results match `readelf` for nine architectures.
 * Signing is OpenPGP (RSA or Ed25519, no passphrase) written in MoonBit on top of the low-level packages of `justinwongcn/moonpgp`;
   signatures made by `gpg`, `rpmsign` and `abuild-sign` verify too.
 * Reads and fully verifies real packages of Debian, Ubuntu, Fedora, openEuler, Arch and Alpine; every unpacking has a size limit.

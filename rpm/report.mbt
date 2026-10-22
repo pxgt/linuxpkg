@@ -60,6 +60,39 @@ fn kind_of(mode : Int32) -> String {
 }
 
 ///|
+/// What `@elf.summary` says about each ELF file of the payload, by install
+/// path. Left empty when the payload is large or cannot be unpacked (for
+/// example an unsupported compressor): the rest of the report does not need it.
+fn RpmPackage::elf_summaries(self : RpmPackage) -> Map[String, Json] {
+  let found : Map[String, Json] = Map([])
+  if self.payload.length() > ELF_SCAN_LIMIT {
+    return found
+  }
+  try self.payload_entries(max_unpacked=ELF_SCAN_LIMIT * 8) catch {
+    _ => ()
+  } noraise {
+    entries =>
+      for entry in entries {
+        let json = @elf.summary(entry.data[:])
+        if json != Json::null() {
+          let path = if entry.path.has_prefix("./") {
+            entry.path[1:].to_owned()
+          } else {
+            entry.path
+          }
+          found[path] = json
+        }
+      }
+  }
+  found
+}
+
+///|
+/// Largest compressed payload (bytes) whose files `inspect` looks into for ELF
+/// headers.
+const ELF_SCAN_LIMIT : Int32 = 33554432
+
+///|
 fn text_or_null(text : String) -> Json {
   if text == "" {
     Json::null()
@@ -89,6 +122,7 @@ pub fn RpmPackage::to_json(self : RpmPackage) -> Json raise RpmError {
   }
   let conffiles : Array[Json] = []
   let file_json : Array[Json] = []
+  let elf_files = self.elf_summaries()
   for file in files {
     if (file.flags & FILE_CONFIG) != 0 {
       conffiles.push(Json::string(file.path))
@@ -103,6 +137,10 @@ pub fn RpmPackage::to_json(self : RpmPackage) -> Json raise RpmError {
         "size": Json::number(file.size.to_double()),
         "mtime": Json::number(file.mtime.to_double()),
         "link": text_or_null(file.link),
+        "elf": match elf_files.get(file.path) {
+          Some(json) => json
+          None => Json::null()
+        },
       }),
     )
   }

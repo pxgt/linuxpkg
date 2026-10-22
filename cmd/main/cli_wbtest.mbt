@@ -999,3 +999,114 @@ test "SOURCE_DATE_EPOCH-free builds depend only on the configuration mtime" {
   assert_eq(pkg.field("builddate"), Some("1700000000"))
   remove_tree(dir)
 }
+
+///|
+/// The 64-byte header of a little-endian 64-bit ELF file for `machine`, with no
+/// program headers: enough for the reader, not a program that runs.
+fn elf_header(machine : Int32) -> Bytes {
+  let bytes : Array[Byte] = Array::make(64, (0).to_byte())
+  let text = b"\x7fELF\x02\x01\x01"
+  for i in 0..<text.length() {
+    bytes[i] = text[i]
+  }
+  bytes[16] = 2
+  bytes[18] = (machine & 0xff).to_byte()
+  bytes[19] = (machine >> 8).to_byte()
+  bytes[20] = 1
+  Bytes::from_array(bytes)
+}
+
+///|
+test "build refuses an ELF file of another architecture, warns for all, and --allow-arch-mismatch overrides" {
+  let dir = "cli_elf_tmp"
+  ensure_dir(dir)
+  let config = fn(arch : String) -> String {
+    "{\"name\":\"prog\",\"version\":\"1\",\"arch\":\"\{arch}\",\"maintainer\":\"J <j@example.org>\",\"description\":\"Demo\",\"contents\":[{\"src\":\"prog\",\"dst\":\"/usr/bin/prog\",\"mode\":\"0755\"}]}"
+  }
+  write_bytes(dir + "/prog", elf_header(183))
+  write_bytes(dir + "/amd64.json", @utf8.encode(config("amd64")))
+  write_bytes(dir + "/arm64.json", @utf8.encode(config("arm64")))
+  write_bytes(dir + "/all.json", @utf8.encode(config("all")))
+  // arm64 program, amd64 package: nothing is written.
+  assert_eq(run(["build", dir + "/amd64.json", "--out", dir + "/a"]), 1)
+  assert_false(@fs.path_exists(dir + "/a"))
+  // The escape hatch on the command line, and the right architecture.
+  assert_eq(
+    run([
+      "build",
+      dir + "/amd64.json",
+      "--allow-arch-mismatch",
+      "--out",
+      dir + "/b",
+    ]),
+    0,
+  )
+  assert_eq(run(["build", dir + "/arm64.json", "--out", dir + "/c"]), 0)
+  // An architecture independent package builds (with a warning on stderr).
+  assert_eq(run(["build", dir + "/all.json", "--out", dir + "/d"]), 0)
+  // `inspect` shows the ELF facts, in text and JSON.
+  let deb = dir + "/c/prog_1-1_arm64.deb"
+  assert_true(@fs.path_exists(deb))
+  assert_eq(run(["inspect", deb]), 0)
+  guard @deb.read(read_bytes(deb)).to_json() is Object(report) else {
+    fail("object expected")
+  }
+  guard report.get("files") is Some(Array(files)) else {
+    fail("files expected")
+  }
+  let elf_entries = files.filter(f => {
+    f is Object(m) && m.get("elf") is Some(Object(_))
+  })
+  assert_eq(elf_entries.length(), 1)
+  // The `elf` command.
+  assert_eq(run(["elf", dir + "/prog"]), 0)
+  assert_eq(run(["elf", dir + "/prog", "--json"]), 0)
+  assert_eq(run(["elf"]), 1)
+  assert_eq(run(["elf", dir + "/amd64.json"]), 1)
+  assert_eq(run(["elf", dir + "/missing"]), 1)
+  for sub in ["b", "c", "d"] {
+    for name in @fs.read_dir(dir + "/" + sub) {
+      @fs.remove_file(dir + "/" + sub + "/" + name)
+    }
+    @fs.remove_dir(dir + "/" + sub)
+  }
+  for name in @fs.read_dir(dir) {
+    @fs.remove_file(dir + "/" + name)
+  }
+  @fs.remove_dir(dir)
+}
+
+///|
+test "init --moon takes the architecture from the built binary" {
+  let dir = "cli_initelf_tmp"
+  ensure_dir(dir)
+  ensure_dir(dir + "/cmd")
+  ensure_dir(dir + "/cmd/main")
+  ensure_dir(dir + "/_build/native/release/build/cmd/main")
+  write_bytes(
+    dir + "/moon.mod",
+    @utf8.encode("name = \"a/tool\"\n\nversion = \"1.0.0\"\n"),
+  )
+  write_bytes(dir + "/cmd/main/moon.pkg", b"pkgtype(kind: \"executable\")\n")
+  let built = dir + "/_build/native/release/build/cmd/main/main.exe"
+  write_bytes(built, elf_header(183))
+  assert_eq(run(["init", "--moon", dir]), 0)
+  let detected = @spec.Config::parse(
+    @utf8.decode(read_bytes(dir + "/linuxpkg.json")),
+  )
+  assert_eq(detected.arch, @spec.Arch::Arm64)
+  // --arch wins, even against the binary (the build will say no later).
+  assert_eq(run(["init", "--moon", dir, "--force", "--arch", "amd64"]), 0)
+  let given = @spec.Config::parse(
+    @utf8.decode(read_bytes(dir + "/linuxpkg.json")),
+  )
+  assert_eq(given.arch, @spec.Arch::Amd64)
+  // A binary that is not ELF (or not yet built): the old default.
+  write_bytes(built, b"#!/bin/sh\n")
+  assert_eq(run(["init", "--moon", dir, "--force"]), 0)
+  let fallback = @spec.Config::parse(
+    @utf8.decode(read_bytes(dir + "/linuxpkg.json")),
+  )
+  assert_eq(fallback.arch, @spec.Arch::Amd64)
+  remove_tree(dir)
+}

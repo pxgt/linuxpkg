@@ -62,6 +62,17 @@ The script checks, in order:
    `rpmlib(PayloadIsZstd)` requirements in `rpm -qp --requires`, `rpm2cpio | cpio`, a private-root install and `rpm -V`
    pass. A configuration with `"compression": "xz"` and `"rpm": {"compression": "zstd"}` is checked too.
 
+## ELF architecture detection
+
+`tools/elf/check.sh LINUXPKG` (run by the `oracle` job of CI) compiles `testdata/elf/hello.c` (dynamic) and `tiny.c` (static,
+no libc) with the Ubuntu cross compilers for amd64, arm64, i386, armhf, armel, ppc64le, s390x, riscv64 and mips64le, and
+compares `linuxpkg elf --json` with `readelf -h -l -d` (class, byte order, interpreter, `DT_NEEDED`, `DT_SONAME`, type) for these
+files, for the committed samples and for binaries of the machine. Then it builds a package for the right architecture
+(accepted), for another one (refused, nothing written, message names the CPU), for `all` (warning) and with
+`--allow-arch-mismatch`, and checks that `inspect` shows the CPU. The `containers` job also copies `/bin/ls`, `bash`, `perl` and
+`busybox` out of the Debian, Ubuntu, Fedora, Arch and Alpine images and compares them with `readelf` on the host.
+`tools/elf/make_samples.sh` and `tools/elf/samples_to_mbt.py` regenerate the committed samples and the test file that holds them.
+
 ## Distribution containers
 
 ```sh

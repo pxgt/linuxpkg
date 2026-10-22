@@ -200,7 +200,8 @@ pub fn lp_build(
 ) -> String {
   try {
     let parsed = @spec.Config::parse(config)
-    let spec = parsed.resolve(files_of(files), default_mtime=mtime.to_int64())
+    let sources = files_of(files)
+    let spec = parsed.resolve(sources, default_mtime=mtime.to_int64())
     let forced : @compress.Compression? = if compression == "" {
       None
     } else {
@@ -257,6 +258,7 @@ pub fn lp_build(
     Json::object({
       "packages": Json::array(out),
       "skipped": Json::array(skipped),
+      "warnings": Json::array(parsed.elf_warnings(sources).map(Json::string)),
     }).stringify()
   } catch {
     err => error_json("\{err}")

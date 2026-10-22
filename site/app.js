@@ -36,7 +36,7 @@ const T = {
     sig_unsigned: "unsigned", sig_signed: "signed by key", sig_good: "signature OK, key", sig_bad: "bad signature",
     sig_na: "signed through the repository (or a .sig file)", sig_unchecked: "not checked: no key given",
     built_title: "Built", built_note: "Same bytes as `linuxpkg build` on the command line.", inspect_it: "inspect",
-    skipped: "skipped", error: "Error", loaderror: "linuxpkg-web.js could not be loaded; the page cannot run the library.",
+    skipped: "skipped", warning: "Warning", error: "Error", loaderror: "linuxpkg-web.js could not be loaded; the page cannot run the library.",
     pick_files: "Choose the files named in the configuration, then build.", missing_file: "Add this file: ",
   },
   zh: {
@@ -71,7 +71,7 @@ const T = {
     sig_unsigned: "未签名", sig_signed: "已签名，密钥", sig_good: "签名有效，密钥", sig_bad: "签名无效",
     sig_na: "通过软件源（或 .sig 文件）签名", sig_unchecked: "未校验：没有提供公钥",
     built_title: "已生成", built_note: "和命令行 `linuxpkg build` 的字节相同。", inspect_it: "检查",
-    skipped: "已跳过", error: "出错", loaderror: "无法加载 linuxpkg-web.js，本页不能运行。",
+    skipped: "已跳过", warning: "提示", error: "出错", loaderror: "无法加载 linuxpkg-web.js，本页不能运行。",
     pick_files: "请选择配置里列出的文件，然后打包。", missing_file: "请添加文件：",
   },
 };
@@ -175,13 +175,26 @@ function drawResult(entry) {
   const body = el("tbody");
   for (const f of r.files || []) {
     body.append(el("tr", {},
-      el("td", { class: "path" }, f.path + (f.link ? " → " + f.link : "")),
+      el("td", { class: "path" }, f.path + (f.link ? " → " + f.link : ""), ...elfNote(f.elf)),
       el("td", {}, f.type), el("td", {}, f.mode), el("td", {}, f.owner + "/" + f.group),
       el("td", { class: "num" }, f.size)));
   }
   table.append(body);
   box.append(el("h4", {}, t("r_files") + " (" + (r.files || []).length + ")"), el("div", { class: "filelist" }, table));
   return box;
+}
+
+// One line about an ELF file (what `readelf -h -l -d` shows): CPU, linking, libraries.
+function elfNote(elf) {
+  if (!elf) return [];
+  let text;
+  if (elf.error) text = "ELF: " + elf.error;
+  else {
+    text = "ELF " + elf.bits + "-bit " + (elf.arch || elf.machine_name) + ", " + elf.linkage;
+    if (elf.interpreter) text += ", " + elf.interpreter;
+    if (elf.needed && elf.needed.length) text += ", needs " + elf.needed.join(", ");
+  }
+  return [el("div", { class: "elf" }, text)];
 }
 
 function renderResults() {
@@ -267,6 +280,7 @@ function doBuild() {
   }
   out.append(el("h3", {}, t("built_title")), links, el("p", {}, t("built_note")));
   for (const s of result.skipped || []) out.append(el("p", { class: "bad" }, t("skipped") + ": " + s));
+  for (const w of result.warnings || []) out.append(el("p", { class: "bad" }, t("warning") + ": " + w));
 }
 
 function renderAll() { if (globalThis.lp_inspect) { renderResults(); renderSrcFiles(); } }

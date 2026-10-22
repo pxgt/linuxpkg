@@ -48,7 +48,8 @@ linuxpkg 是一个**纯 MoonBit** 实现的 Linux 软件包构建与检查工具
 | **软件源**：`linuxpkg repo <目录>` 生成 apt 平铺仓库（Packages / Packages.gz / Packages.xz / Release）和 dnf 仓库（repodata，与 createrepo_c 输出一致），别人直接 `apt install` / `dnf install` | ✅ |
 | **签名**（OpenPGP，RSA 或 Ed25519，纯 MoonBit 实现，同样输入逐字节相同的签名）：apt `InRelease` / `Release.gpg`、dnf `repomd.xml.asc`、rpm 包头签名（`rpm -K` 显示 OK）、Arch `.sig`、Alpine `.SIGN.RSA256`；`verify --keyring` 校验；`rpmsign`、`abuild-sign`、`gpg` 做的签名也能校验 | ✅ |
 | **软件源**扩展到四大家族：`repo --format arch`（`NAME.db`，与 `repo-add` 一致）、`--format apk`（`APKINDEX.tar.gz`，与 `apk index` 一致），签名后 `pacman -Sy`、`apk add` 不加任何"信任所有"开关即可安装 | ✅ |
-| `linuxpkg init --moon`：读 `moon.mod`，为 MoonBit 项目的可执行包生成配置 | ✅ |
+| `linuxpkg init --moon`：读 `moon.mod`，为 MoonBit 项目的可执行包生成配置（已编好的程序会用它自己的架构） | ✅ |
+| **ELF 架构识别**（纯 MoonBit 的 ELF 头解析，32/64 位、大小端）：打包时发现 arm64 程序被放进 amd64 包就**报错**（`all` 包里有 ELF 则警告，`--allow-arch-mismatch` 可放行）；`linuxpkg elf` 和 `inspect` 显示架构、静态或动态、解释器和依赖的动态库；九种架构的真实程序与 `readelf` 逐项一致 | ✅ |
 | 网页版（`web` 包编成 JavaScript）：在浏览器里检查、校验、打包，文件不上传；GitHub Action（`pxgt/linuxpkg`）；Linux 静态二进制和自打包的 deb/rpm/pkg.tar.zst/apk | ✅ |
 | 有界解压：xz、zstd、gzip 炸弹在解压前或解压中就被上限截住（默认 1 GiB） | ✅ |
 
