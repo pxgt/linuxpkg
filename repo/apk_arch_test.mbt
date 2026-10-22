@@ -267,7 +267,7 @@ test "arch database: files, desc fields and the file list" {
   assert_eq(file_entries.length(), 6)
   let list = content_of(file_entries[5])
   assert_eq(
-    list, "%FILES%\netc/\netc/beta.conf\nusr/\nusr/bin/\nusr/bin/beta\nusr/share/\nusr/share/beta/\nusr/share/beta/data.txt\n\n",
+    list, "%FILES%\netc/\netc/beta.conf\nusr/\nusr/bin/\nusr/bin/beta\nusr/share/\nusr/share/beta/\nusr/share/beta/data.txt\n",
   )
   assert_false(list.contains(".PKGINFO"))
   assert_eq(@repo.check_arch(files, packages, [], name="demo"), [])
