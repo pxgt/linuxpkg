@@ -60,6 +60,16 @@ jobs:
             done
           done
 
+      - name: Browser build gives the same packages and the same inspect output (Node)
+        run: |
+          moon build --target js --release web
+          mkdir -p /tmp/ws/cli /tmp/ws/json
+          moon run cmd/main --target native -- build examples/hello/linuxpkg.json --out /tmp/ws/cli
+          for f in /tmp/ws/cli/*; do
+            moon run cmd/main --target native -- inspect "$f" --json > "/tmp/ws/json/$(basename "$f").json"
+          done
+          node tools/web_smoke.js _build/js/release/build/web/web.js examples/hello /tmp/ws/cli /tmp/ws/json
+
       - name: Enforce the core line-coverage floor
         run: python3 tools/check_core_coverage.py --minimum 80
 

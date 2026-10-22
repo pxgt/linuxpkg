@@ -1,0 +1,51 @@
+name: Pages
+
+# Builds the browser library (web/ compiled to JavaScript) and the static page in site/,
+# and publishes them on GitHub Pages. Build outputs are never committed.
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", "web/**", "spec/**", "compress/**", "deb/**", "rpm/**", "arch/**", "apk/**", "sign/**", "archive/**", ".github/workflows/pages.yml"]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Build the browser library
+        run: |
+          moon update
+          moon build --target js --release web
+          cp _build/js/release/build/web/web.js site/linuxpkg-web.js
+          ls -l site
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

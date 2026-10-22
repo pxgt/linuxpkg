@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>linuxpkg — build, inspect, sign and publish Linux packages</title>
+<meta name="description" content="Pure-MoonBit toolkit: deb, rpm, Arch and Alpine packages, signed apt, dnf, pacman and apk repositories. Try it in your browser; nothing is uploaded.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Cpath d='M8 12l8-5 8 5v9l-8 5-8-5z' fill='none' stroke='white' stroke-width='2.2' stroke-linejoin='round'/%3E%3Cpath d='M8 12l8 5 8-5M16 17v9' fill='none' stroke='white' stroke-width='2.2'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#top"><span class="logo" aria-hidden="true"></span>linuxpkg</a>
+  <nav>
+    <a href="#try" data-i18n="nav_try">Try it</a>
+    <a href="#build" data-i18n="nav_build">Build</a>
+    <a href="#install" data-i18n="nav_install">Install</a>
+    <a href="#verified" data-i18n="nav_verified">Verified</a>
+    <a href="#docs" data-i18n="nav_docs">Docs</a>
+  </nav>
+  <button id="lang" class="chip" type="button" aria-label="Language">中文</button>
+</header>
+
+<main id="top">
+<section class="hero">
+  <h1 data-i18n="hero_title">Build, sign and publish Linux packages — in pure MoonBit</h1>
+  <p class="lead" data-i18n="hero_lead">One JSON file becomes a deb, rpm, Arch and Alpine package. Sign them, make apt, dnf, pacman and apk repositories, and check packages from any distribution. No dpkg, no rpmbuild, no root; it runs on Windows, macOS, Linux and in this page.</p>
+  <div class="actions">
+    <a class="btn primary" href="#try" data-i18n="btn_try">Try it online</a>
+    <a class="btn" href="#install" data-i18n="btn_install">Install</a>
+    <a class="btn" href="https://github.com/pxgt/linuxpkg">GitHub</a>
+  </div>
+  <p class="privacy" data-i18n="privacy">Everything happens in your browser. Files you drop here are never uploaded.</p>
+</section>
+
+<noscript><p class="warn">This page needs JavaScript to run linuxpkg in your browser.</p></noscript>
+<p id="loaderror" class="warn" hidden></p>
+
+<section id="try" class="panel">
+  <h2 data-i18n="try_title">Inspect and verify a package</h2>
+  <p data-i18n="try_lead">Drop a .deb, .rpm, .apk or .pkg.tar.* file. You get the metadata, the file list, a check of every checksum and the signature state.</p>
+  <div id="drop" class="drop" tabindex="0" role="button">
+    <span data-i18n="drop_text">Drop packages here, or click to choose</span>
+    <input id="file" type="file" multiple hidden>
+  </div>
+  <div class="row">
+    <span data-i18n="samples">Or load a sample built right now by linuxpkg:</span>
+    <button class="chip" data-sample="deb" type="button">deb</button>
+    <button class="chip" data-sample="rpm" type="button">rpm</button>
+    <button class="chip" data-sample="arch" type="button">Arch</button>
+    <button class="chip" data-sample="apk" type="button">apk</button>
+  </div>
+  <details class="keyring">
+    <summary data-i18n="keyring_sum">Check a signature (optional): paste a public key</summary>
+    <textarea id="keyring" rows="4" spellcheck="false" placeholder="-----BEGIN PGP PUBLIC KEY BLOCK----- … or -----BEGIN PUBLIC KEY-----"></textarea>
+  </details>
+  <div id="results"></div>
+</section>
+
+<section id="build" class="panel">
+  <h2 data-i18n="build_title">Build a package</h2>
+  <p data-i18n="build_lead">Edit the configuration, add your files, and get all four formats. The bytes are identical to what the command line writes for the same input.</p>
+  <div class="grid2">
+    <div>
+      <label for="config" data-i18n="config_label">linuxpkg.json</label>
+      <textarea id="config" rows="16" spellcheck="false"></textarea>
+    </div>
+    <div>
+      <label data-i18n="files_label">Files (the config names them under "src")</label>
+      <div id="srcfiles" class="srcfiles"></div>
+      <button id="addfile" class="chip" type="button" data-i18n="add_files">Add files…</button>
+      <input id="addinput" type="file" multiple hidden>
+      <div class="row">
+        <label for="compression" data-i18n="compression">Compression</label>
+        <select id="compression">
+          <option value="">(config)</option>
+          <option>gzip</option><option>xz</option><option>zstd</option><option>none</option>
+        </select>
+        <label for="formats" data-i18n="formats">Formats</label>
+        <select id="formats">
+          <option value="all">all</option><option>deb</option><option>rpm</option><option>arch</option><option>apk</option>
+        </select>
+      </div>
+      <button id="dobuild" class="btn primary" type="button" data-i18n="do_build">Build</button>
+    </div>
+  </div>
+  <div id="built"></div>
+</section>
+
+<section id="install" class="panel">
+  <h2 data-i18n="install_title">Install</h2>
+  <div id="install-body">
+    <p data-i18n="install_cli">The command line is one static binary (Linux x86_64 and aarch64) or <code>moonx Xpeng/linuxpkg/cmd/main</code> anywhere MoonBit runs; as a library: <code>moon add Xpeng/linuxpkg</code>.</p>
+    <pre><code>moon add Xpeng/linuxpkg
+moonx Xpeng/linuxpkg/cmd/main -- build linuxpkg.json --format all --sign-key release.key</code></pre>
+    <p data-i18n="install_repos_soon">Signed apt, dnf, pacman and apk repositories of linuxpkg itself are published with the next release; this section will list the commands.</p>
+  </div>
+</section>
+
+<section id="verified" class="panel">
+  <h2 data-i18n="verified_title">Checked by the real tools</h2>
+  <p data-i18n="verified_lead">Every claim is run in CI against the official tools, in the distributions' containers.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th>Debian 12<br>Ubuntu 24.04</th><th>Fedora 41<br>openEuler 24.03</th><th>Arch Linux</th><th>Alpine 3.20</th></tr></thead>
+    <tbody>
+      <tr><td data-i18n="row_pkg">package</td><td>dpkg -i, lintian</td><td>rpm -K, rpm -V</td><td>pacman -U, -Qkk</td><td>apk add, apk audit</td></tr>
+      <tr><td data-i18n="row_repo">repository</td><td>apt (InRelease)</td><td>dnf (repomd.xml.asc)</td><td>pacman -Sy (repo-add)</td><td>apk (apk index)</td></tr>
+      <tr><td data-i18n="row_sign">signature</td><td>gpgv, signed-by</td><td>rpm -Kv, gpgcheck=1</td><td>SigLevel Required</td><td>no --allow-untrusted</td></tr>
+    </tbody>
+  </table></div>
+  <p><a href="https://github.com/pxgt/linuxpkg/actions/workflows/ci.yml" data-i18n="ci_link">See the latest CI run</a></p>
+</section>
+
+<section id="docs" class="panel">
+  <h2 data-i18n="docs_title">Documentation</h2>
+  <ul class="links">
+    <li><a href="https://github.com/pxgt/linuxpkg/blob/main/docs/config.md" data-i18n="doc_config">Configuration reference</a></li>
+    <li><a href="https://github.com/pxgt/linuxpkg/blob/main/docs/signing.md" data-i18n="doc_signing">Signing</a></li>
+    <li><a href="https://github.com/pxgt/linuxpkg/blob/main/docs/repository.md" data-i18n="doc_repo">Repositories</a></li>
+    <li><a href="https://github.com/pxgt/linuxpkg/blob/main/docs/formats.md" data-i18n="doc_formats">Package formats and differences</a></li>
+    <li><a href="https://github.com/pxgt/linuxpkg/blob/main/docs/verification.md" data-i18n="doc_verification">How everything is verified</a></li>
+    <li><a href="https://mooncakes.io/docs/Xpeng/linuxpkg">API (mooncakes)</a></li>
+  </ul>
+</section>
+</main>
+
+<footer>
+  <span>linuxpkg · Apache-2.0 · <a href="https://github.com/pxgt/linuxpkg">github.com/pxgt/linuxpkg</a></span>
+  <span data-i18n="footer_local">No cookies, no tracking, no external requests.</span>
+</footer>
+
+<script src="linuxpkg-web.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

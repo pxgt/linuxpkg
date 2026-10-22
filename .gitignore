@@ -9,3 +9,4 @@ dist/
 *.rpm
 *.log
 *.tmp
+site/linuxpkg-web.js
