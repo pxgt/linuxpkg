@@ -74,12 +74,15 @@ The official tools are the judges (`tools/oracle/run.sh` on every push, `tools/o
 
 ## Quality
 
-453 tests on every backend, 92.8 % line coverage of the core packages (CI floor 90 %), zero warnings, public interface files
+496 tests on every backend, 92.6 % line coverage of the core packages (CI floor 90 %), zero warnings, public interface files
 checked in CI. Honest limits: the pure-MoonBit zstd encoder is much weaker than the official one (about 2.4 times the size of
 gzip on text) and xz is 18–22 % behind `xz -6`; there is no bzip2; encrypted private keys are refused; Alpine signatures are RSA
 only because apk only knows RSA. See [docs/formats.md](docs/formats.md) and [docs/performance.md](docs/performance.md).
 
 ## Credits and licence
+
+Used by [moonthrift](https://github.com/pxgt/moonthrift), which builds its deb, rpm, Arch and Alpine packages with the GitHub Action
+([workflow](https://github.com/pxgt/moonthrift/blob/main/.github/workflows/linux-packages.yml)).
 
 Format knowledge from google/rpmpack (Apache-2.0), nFPM (MIT), the Debian, rpm.org, Arch and Alpine documentation; signing
 building blocks from `justinwongcn/moonpgp`; compression from `moonbit-community/flate`, `Milky2018/zstd`, `lin2077-zeming/moonxz`

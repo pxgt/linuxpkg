@@ -166,12 +166,12 @@ linuxpkg init --moon .                           # 为当前 MoonBit 项目生�
 
 ## 质量数字
 
-- 测试：453 个，wasm-gc、wasm、js、native 四个后端全部通过（含 tar / ar / cpio / rpm 头 / 压缩的随机输入"写出再读回"属性测试、签名的可复现与篡改测试、命令行端到端测试）。
-- 核心包行覆盖率 **92.8%**（spec 97.4%、tar 97.8%、ar 96.4%、cpio 100%、deb 95.8%、rpm 94.2%、compress 93.3%、repo 88.9%、arch 91.5%、apk 89.8%、sign 88.3%），CI 强制不低于 90%（`tools/check_core_coverage.py`）。
+- 测试：496 个，wasm-gc、wasm、js、native 四个后端全部通过（含 tar / ar / cpio / rpm 头 / 压缩的随机输入"写出再读回"属性测试、签名的可复现与篡改测试、命令行端到端测试）。
+- 核心包行覆盖率 **92.6%**（spec 97.6%、tar 97.8%、ar 96.4%、cpio 100%、deb 95.8%、rpm 94.1%、compress 93.3%、repo 88.9%、arch 91.6%、apk 89.9%、sign 88.3%、elf 92.6%、nfpm 91.6%），CI 强制不低于 90%（`tools/check_core_coverage.py`）。
 - 恶意输入：tar、ar、cpio、deb、rpm 的每一种截断和每个字节翻转（gzip / xz / zstd / 不压缩各测一遍）都只会得到结果或明确的错误，不会崩溃；
   gzip、xz、zstd 炸弹都被 1 GiB 默认上限截住（xz 和 zstd 在解压前就从块头 / 帧头算出解压后大小）。
 
-文档：[教程（5 分钟发布到四大家族）](docs/tutorial.md)、[签名](docs/signing.md)、[软件源](docs/repository.md)、[GitHub Action](docs/github-action.md)、[配置参考](docs/config.md)、[格式说明与和规范的差异](docs/formats.md)、[如何复现所有验证](docs/verification.md)、
+文档：[教程（5 分钟发布到四大家族）](docs/tutorial.md)、[签名](docs/signing.md)、[软件源](docs/repository.md)、[GitHub Action](docs/github-action.md)、[配置参考](docs/config.md)、[读 nFPM 配置](docs/nfpm.md)、[格式说明与和规范的差异](docs/formats.md)、[如何复现所有验证](docs/verification.md)、
 [架构](docs/architecture.md)、[性能](docs/performance.md)、[开发日志](docs/devlog.md)、[贡献指南](CONTRIBUTING.md)、[安全策略](SECURITY.md)。
 
 ## 范围与不做的事
@@ -187,12 +187,16 @@ linuxpkg init --moon .                           # 为当前 MoonBit 项目生�
 已知限制：文件的权限位和修改时间不从磁盘读取（MoonBit 的文件 API 拿不到），一律由配置决定，这也正好保证可复现。
 文件属主在 tar 里写名字，数字 id 固定为 0，由包管理器按名字解析。
 
+## 谁在用
+
+- [moonthrift](https://github.com/pxgt/moonthrift)（Apache Thrift 的 MoonBit 实现）：用 `pxgt/linuxpkg` 这个 GitHub Action 在发布时打 deb、rpm、Arch、apk 四种安装包，工作流见 [linux-packages.yml](https://github.com/pxgt/moonthrift/blob/main/.github/workflows/linux-packages.yml)；它的带签名软件源就在 linuxpkg 的公开站点上。
+
 ## 相关项目与致谢
 
 - MoonBit 生态里已有 [`xmyd0915/moonar`](https://mooncakes.io/docs/xmyd0915/moonar)（ar 归档）和
   [`oilleelssq-wq/moon-cpio`](https://mooncakes.io/docs/oilleelssq-wq/moon-cpio)（cpio 归档）两个底层零件。
   linuxpkg 自己实现了 ar / tar / cpio，是为了完全控制确定性输出，并让归档格式与打包逻辑一起被官方工具验证；对这两个项目表示尊重。
-- 配置字段命名参考 [nFPM](https://github.com/goreleaser/nfpm)（MIT）。
+- 配置字段命名参考 [nFPM](https://github.com/goreleaser/nfpm)（MIT），并且能直接读它的配置文件（[docs/nfpm.md](docs/nfpm.md)）；CI 里用真 nFPM 做逐项对照。
 - rpm 的头部布局、tag 与不可变区域参考 [google/rpmpack](https://github.com/google/rpmpack)（Apache-2.0）的格式知识，以 rpm 官方工具的实测结果为准，用 MoonBit 重新实现，没有复制代码。
 - 压缩算法来自三个现成的 MoonBit 库：gzip 用 [moonbit-community/flate](https://mooncakes.io/docs/moonbit-community/flate)，
   zstd 用 [Milky2018/zstd](https://mooncakes.io/docs/Milky2018/zstd)，xz 写入用
