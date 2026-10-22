@@ -57,6 +57,20 @@ a specification; the fix is in the code and the check that would catch it again 
   `apk index` writes empty `T:`, `U:` and `L:` lines. The containers job compares our databases with the real tools' output
   byte for byte.
 
+## ELF detection (October 22–23)
+
+* **The ELF library on mooncakes cannot be installed.** `moonbit-community/elf@0.0.1` is published with a legacy `moon.mod.json`,
+  which the current `moon` refuses ("is no longer supported"), so the evaluation ended before any code was read. The reader in
+  this project is about 300 lines and has no dependency.
+* **`DT_STRTAB` is an address, not an offset.** The string table address of the dynamic section has to go through the `PT_LOAD`
+  segments to become a file offset, as the dynamic linker does; the nine cross-compiled architectures and `/bin/ls` all pass because
+  of that step.
+* **Reproducing a download problem found a workflow bug.** The Release of 0.4.0 had a damaged Alpine package: both build jobs
+  wrote `linuxpkg-0.4.0-r1.apk` and `merge-multiple` mixed the two files. Python's `zlib` said `invalid stored block lengths` while
+  the same input built on four backends was valid, which is what pointed away from the compressor.
+* **`apt-get` with a temporary source list.** Installing cross compilers in WSL failed because the configured mirror answered
+  403; `apt-get -o Dir::Etc::sourcelist=...` pointing at `archive.ubuntu.com` fixed it without touching the system configuration.
+
 ## Where the time went
 
 Most of the work was the loop "write it, give it to the official tool, read the complaint". That loop is now a script

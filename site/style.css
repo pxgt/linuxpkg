@@ -88,3 +88,4 @@ footer {
   .top #lang { order: 2; margin-left: auto; }
   .top nav { order: 3; flex: 1 0 100%; flex-wrap: wrap; overflow: visible; gap: 6px 16px; }
 }
+.elf { color: var(--muted); font-size: .85em; }

@@ -1,12 +1,18 @@
 ///|
 fn load_spec(
   config_path : String,
+  allow_arch_mismatch~ : Bool = false,
 ) -> (@spec.PackageSpec, @spec.Config) raise CliError {
   let text = @fs.read_file_to_string(config_path) catch {
     err => raise Failed(describe_io(err, "cannot read \"\{config_path}\""))
   }
-  let config = @spec.Config::parse(text) catch {
+  let parsed = @spec.Config::parse(text) catch {
     err => raise Failed("\{config_path}: \{err}")
+  }
+  let config = if allow_arch_mismatch {
+    { ..parsed, allow_arch_mismatch: true, }
+  } else {
+    parsed
   }
   let base = dirname(config_path)
   let files : Map[String, Bytes] = Map([])
@@ -19,6 +25,9 @@ fn load_spec(
   }
   let spec = config.resolve(files, default_mtime~) catch {
     err => raise Failed("\{config_path}: \{err}")
+  }
+  for warning in config.elf_warnings(files) {
+    eprintln("linuxpkg: warning: \{warning}")
   }
   (spec, config)
 }
@@ -37,7 +46,7 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
       "--sign-key": "sign_key",
       "--apk-key-name": "apk_key_name",
     },
-    Map([]),
+    { "--allow-arch-mismatch": "allow_arch_mismatch" },
   )
   let config_path = match options.positional {
     [path] => path
@@ -68,7 +77,10 @@ fn cmd_build(args : Array[String]) -> Int32 raise CliError {
       }
     None => None
   }
-  let (spec, config) = load_spec(config_path)
+  let (spec, config) = load_spec(
+    config_path,
+    allow_arch_mismatch=options.flag("allow_arch_mismatch"),
+  )
   // --sign-key wins over "sign_key" in the configuration, whose path is
   // relative to the configuration file.
   let key_path = match (options.value("sign_key"), config.sign_key) {

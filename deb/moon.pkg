@@ -1,4 +1,5 @@
 import {
+  "Xpeng/linuxpkg/elf",
   "Xpeng/linuxpkg/spec",
   "Xpeng/linuxpkg/archive/tar",
   "Xpeng/linuxpkg/archive/ar",

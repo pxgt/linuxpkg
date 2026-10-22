@@ -24,6 +24,7 @@ rejected, and every error names its field (for example `contents[2].dst`). Relat
 | `deb`, `rpm`, `pacman` | object | none | Per-format overrides. Only `compression` is allowed, for example `"deb": {"compression": "zstd"}`. `pacman` is the Arch Linux package (`arch` is already the CPU architecture); its default is `zstd`. |
 | `sign_key` | string | none | Path of an OpenPGP private key (relative to the configuration file) that signs rpm, Arch Linux and Alpine packages; `--sign-key` on the command line wins. See [signing.md](signing.md). |
 | `apk_key_name` | string | `linuxpkg-<key id>.rsa.pub` | File name of the public key in Alpine signatures, the name users give it in `/etc/apk/keys/`. |
+| `allow_arch_mismatch` | boolean | `false` | Build even if an ELF file in `contents` is for another CPU than `arch` (cross toolchains, firmware). `build --allow-arch-mismatch` does the same. See *ELF files* below. |
 | `contents` | object array | `[]` | Files, directories and links, see below. |
 | `scripts` | object | none | `preinstall`, `postinstall`, `preremove`, `postremove`: paths of script files; each must start with `#!` for deb. |
 | `$schema` | string | ignored | For editors. |
@@ -64,11 +65,28 @@ Operators: `<<`/`<`, `<=`, `=`/`==`, `>=`, `>>`/`>`; `<` and `>` are strict. One
 
 Parent directories: debs and Arch Linux packages list every parent directory automatically; rpms own only the directories you list.
 
+### ELF files
+
+`build` reads the header of every regular file in `contents` that starts with the ELF magic number and compares the CPU it is
+built for with `arch`. This stops the most common packaging accident: an arm64 program in an amd64 package.
+
+* A specific `arch` and an ELF file for another CPU: the build **stops** before anything is written, with a message such as
+  `contents[0]: /usr/bin/hello is an ELF file for arm64, but the package architecture is amd64`.
+* `arch` is `all` (or `noarch`) and the package contains an ELF file: a **warning** on standard error, the build goes on.
+* `"allow_arch_mismatch": true` or `--allow-arch-mismatch` silences both.
+* An ELF file for a machine that has no package architecture (other CPUs, big-endian PowerPC, x32 and n32 ABIs) is not
+  compared. 32-bit ARM is `armhf` when the hard-float flag is set in `e_flags` and `armel` otherwise.
+
+`linuxpkg elf <file> [--json]` shows what the headers say (CPU, 32/64 bit, byte order, static or dynamic, interpreter,
+`DT_NEEDED`, `DT_SONAME`), and `inspect` shows the same line under every ELF file of a package; with `--json` each file has an `elf`
+object (`null` for other files). `init --moon` uses the architecture of the binary when it is already built.
+
 ## Command line
 
 ```
-linuxpkg build <config.json> [--format deb|rpm|arch|apk|all] [--compression none|gzip|xz|zstd] [--sign-key KEY] [--apk-key-name N] [--out DIR]
+linuxpkg build <config.json> [--format deb|rpm|arch|apk|all] [--compression none|gzip|xz|zstd] [--sign-key KEY] [--apk-key-name N] [--allow-arch-mismatch] [--out DIR]
 linuxpkg inspect <file.deb|file.rpm> [--json]
+linuxpkg elf <file> [--json]
 linuxpkg verify  <package|repository dir> [--keyring KEY]
 linuxpkg repo   <dir> [--format deb|rpm|all] [--sign-key KEY]
 linuxpkg key apk-pub|info <private key> [--name NAME] [--out DIR]

@@ -81,6 +81,9 @@ pub(all) struct Config {
   /// File name of the Alpine public key (`mykey.rsa.pub`) written into the
   /// signature of apk packages; `linuxpkg-<key id>.rsa.pub` when unset.
   apk_key_name : String?
+  /// Do not stop when an ELF file in `contents` is built for another CPU than
+  /// `arch` (cross toolchains, firmware); `build --allow-arch-mismatch` sets it too.
+  allow_arch_mismatch : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -118,7 +121,7 @@ let top_level_keys : Array[String] = [
   "$schema", "name", "version", "release", "epoch", "arch", "maintainer", "description",
   "homepage", "license", "vendor", "section", "priority", "depends", "recommends",
   "suggests", "conflicts", "replaces", "provides", "mtime", "contents", "scripts",
-  "compression", "deb", "rpm", "pacman", "sign_key", "apk_key_name",
+  "compression", "deb", "rpm", "pacman", "sign_key", "apk_key_name", "allow_arch_mismatch",
 ]
 
 ///|
@@ -491,5 +494,10 @@ pub fn Config::parse(text : String) -> Config raise SpecError {
     pacman: parse_format_options(map.get("pacman"), "pacman"),
     sign_key: opt_string(map, "sign_key", "sign_key"),
     apk_key_name: opt_string(map, "apk_key_name", "apk_key_name"),
+    allow_arch_mismatch: match map.get("allow_arch_mismatch") {
+      None | Some(Null) | Some(False) => false
+      Some(True) => true
+      Some(_) => raise invalid("allow_arch_mismatch", "must be true or false")
+    },
   }
 }

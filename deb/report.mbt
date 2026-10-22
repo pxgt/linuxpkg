@@ -34,6 +34,10 @@ fn file_json(entry : @tar.Entry) -> Json {
     "size": Json::number(size.to_double()),
     "mtime": Json::number(entry.mtime.to_double()),
     "link": link,
+    "elf": match entry.kind {
+      File(content) => @elf.summary(content[:])
+      _ => Json::null()
+    },
   })
 }
 

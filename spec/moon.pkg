@@ -1,5 +1,10 @@
 import {
+  "Xpeng/linuxpkg/elf",
   "Xpeng/linuxpkg/compress",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
 }
+
+import {
+  "moonbitlang/core/encoding/base64",
+} for "test"

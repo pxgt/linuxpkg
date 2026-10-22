@@ -175,11 +175,48 @@ fn render_report(report : Json) -> String raise CliError {
         out.write_string(
           "  \{mode}  \{owner}  \{size}  \{field_text(entry, "path")}\{link}\n",
         )
+        match entry.get("elf") {
+          Some(Object(elf)) => out.write_string("    \{elf_line(elf)}\n")
+          _ => ()
+        }
       }
     }
     _ => ()
   }
   out.to_string()
+}
+
+///|
+/// One line about an ELF file, from the `elf` object of `inspect --json`.
+fn elf_line(elf : Map[String, Json]) -> String {
+  match elf.get("error") {
+    Some(String(message)) => "ELF, but \{message}"
+    _ => {
+      let order = if field_text(elf, "byte_order") == "little" {
+        "LSB"
+      } else {
+        "MSB"
+      }
+      let arch = match field_text(elf, "arch") {
+        "" => ""
+        name => " (\{name})"
+      }
+      let out = StringBuilder()
+      out.write_string(
+        "ELF \{field_text(elf, "bits")}-bit \{order} \{field_text(elf, "machine_name")}\{arch}, \{field_text(elf, "linkage")}",
+      )
+      match field_text(elf, "interpreter") {
+        "" => ()
+        path => out.write_string(", interpreter \{path}")
+      }
+      let needed = field_list(elf, "needed")
+      if needed.length() > 0 {
+        let libraries = needed.join(", ")
+        out.write_string(", needs \{libraries}")
+      }
+      out.to_string()
+    }
+  }
 }
 
 ///|

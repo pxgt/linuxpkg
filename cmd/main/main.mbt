@@ -18,6 +18,7 @@ const USAGE : String =
   #|  linuxpkg inspect <package> [--json]      (.deb, .rpm, .apk or .pkg.tar.*)
   #|  linuxpkg verify <package|repository dir> [--keyring KEY]
   #|  linuxpkg repo <dir> [--format deb|rpm|all] [--sign-key KEY]
+  #|  linuxpkg elf <file> [--json]
   #|  linuxpkg key apk-pub|info <private key> [--name NAME] [--out DIR]
   #|  linuxpkg init [PATH] [--force]
   #|  linuxpkg init --moon [DIR] [--bin PACKAGE] [--name NAME] [--arch ARCH]
@@ -28,6 +29,7 @@ const USAGE : String =
   #|  inspect  Show the metadata and files of a package.
   #|  verify   Check the checksums of a package.
   #|  repo     Write apt and dnf repository metadata for the packages in a directory.
+  #|  elf      Show the architecture, linking, interpreter and libraries of an ELF file.
   #|  key      Export the Alpine public key (apk-pub) of an RSA signing key, or show
   #|           which key a file holds (info).
   #|  init     Write an example linuxpkg.json to edit, or (--moon) one for the
@@ -46,7 +48,8 @@ const USAGE : String =
   #|                       linuxpkg-<key id>.rsa.pub).
   #|      --keyring KEY    Public key(s) to check signatures against (verify): ASCII armor
   #|                       or binary. Packages and repositories that are not signed fail.
-  #|      --json           Print machine readable JSON (inspect).
+  #|      --allow-arch-mismatch  Build even if an ELF file is for another CPU than "arch" (build).
+  #|      --json           Print machine readable JSON (inspect, elf).
   #|      --force          Overwrite an existing file (init).
   #|  -h, --help           Show this help.
   #|  -V, --version        Show the version.
@@ -102,6 +105,7 @@ fn dispatch(command : String, args : Array[String]) -> Int32 raise CliError {
     "verify" => cmd_verify(args)
     "repo" => cmd_repo(args)
     "key" => cmd_key(args)
+    "elf" => cmd_elf(args)
     _ => raise Usage("unknown command \"\{command}\"")
   }
 }

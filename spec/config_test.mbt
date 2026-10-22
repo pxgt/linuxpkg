@@ -152,7 +152,9 @@ test "malformed input is rejected with the field name" {
   )
   inspect(
     config_error(with_extra("\"colour\": \"red\"")),
-    content="colour: unknown field, expected one of: name, version, release, epoch, arch, maintainer, description, homepage, license, vendor, section, priority, depends, recommends, suggests, conflicts, replaces, provides, mtime, contents, scripts, compression, deb, rpm, pacman, sign_key, apk_key_name",
+    content=(
+      #|colour: unknown field, expected one of: name, version, release, epoch, arch, maintainer, description, homepage, license, vendor, section, priority, depends, recommends, suggests, conflicts, replaces, provides, mtime, contents, scripts, compression, deb, rpm, pacman, sign_key, apk_key_name, allow_arch_mismatch
+    ),
   )
 }
 

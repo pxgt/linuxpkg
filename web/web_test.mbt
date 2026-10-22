@@ -196,3 +196,86 @@ test "inspect of things that are not packages is an error object" {
     }
   }
 }
+
+///|
+/// The 64-byte header of an arm64 ELF file: what `inspect` reads, not a program.
+fn arm64_header() -> Bytes {
+  let bytes : Array[Byte] = [
+    0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0xb7, 0, 1,
+  ]
+  for _ in 0..<(64 - bytes.length()) {
+    bytes.push(0)
+  }
+  Bytes::from_array(bytes)
+}
+
+///|
+const ELF_CONFIG : String =
+  #|{"name":"prog","version":"1","arch":"arm64","maintainer":"J <j@example.org>","description":"Demo","mtime":1700000000,
+  #| "contents":[{"src":"prog","dst":"/usr/bin/prog","mode":"0755"},{"src":"note","dst":"/usr/share/doc/prog/note"}]}
+
+///|
+fn elf_files_json() -> String {
+  let program = @base64.encode(arm64_header()[:])
+  let note = @base64.encode(b"hello\n"[:])
+  "{\"prog\":\"\{program}\",\"note\":\"\{note}\"}"
+}
+
+///|
+test "inspect shows the ELF facts of a file in every package format" {
+  let items = match
+    parse(@web.lp_build(ELF_CONFIG, elf_files_json(), "all", "", 0.0)) {
+    { "packages": Array(items), .. } => items
+    _ => fail("no packages")
+  }
+  assert_eq(items.length(), 4)
+  for pkg in items {
+    let name = text_of(pkg, "name")
+    guard parse(@web.lp_inspect(name, text_of(pkg, "data")))
+      is { "report": Object(report), .. } else {
+      fail("no report for \{name}")
+    }
+    guard report.get("files") is Some(Array(files)) else {
+      fail("no files for \{name}")
+    }
+    let mut seen = 0
+    for file in files {
+      guard file is Object(entry) else { fail("not an object") }
+      match entry.get("elf") {
+        Some(Object(elf)) => {
+          seen += 1
+          assert_true(text_of(file, "path").has_suffix("/usr/bin/prog"))
+          assert_eq(text_of(Json::object(elf), "arch"), "arm64")
+          assert_eq(text_of(Json::object(elf), "linkage"), "static")
+        }
+        Some(Null) => ()
+        _ => fail("missing elf key for \{name}")
+      }
+    }
+    assert_eq(seen, 1)
+  }
+}
+
+///|
+test "build refuses an ELF file of another architecture and reports warnings" {
+  let amd64 = ELF_CONFIG.replace(
+    old="\"arch\":\"arm64\"",
+    new="\"arch\":\"amd64\"",
+  )
+  match parse(@web.lp_build(amd64, elf_files_json(), "deb", "", 0.0)) {
+    { "error": String(message), .. } => {
+      assert_true(message.contains("arm64"))
+      assert_true(message.contains("amd64"))
+    }
+    _ => fail("expected an error")
+  }
+  let independent = ELF_CONFIG.replace(
+    old="\"arch\":\"arm64\"",
+    new="\"arch\":\"all\"",
+  )
+  match parse(@web.lp_build(independent, elf_files_json(), "deb", "", 0.0)) {
+    { "packages": Array(_), "warnings": Array([String(warning)]), .. } =>
+      assert_true(warning.contains("arm64"))
+    _ => fail("expected one warning")
+  }
+}

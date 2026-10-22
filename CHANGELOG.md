@@ -6,6 +6,17 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **ELF architecture detection** (new package `elf`, no file system, all backends): `build` stops when an ELF file in `contents`
+  is for another CPU than `arch` (`contents[0]: /usr/bin/hello is an ELF file for arm64, but the package architecture is
+  amd64`), warns when an `all` package contains ELF files, and accepts `"allow_arch_mismatch": true` /
+  `--allow-arch-mismatch`. `linuxpkg elf FILE [--json]` shows CPU, 32/64 bit, byte order, static or dynamic, interpreter,
+  `DT_NEEDED`, `DT_SONAME`; `inspect` shows it under each ELF file and `inspect --json` has an `elf` object per file (`null` for
+  other files); the web page shows it too. `init --moon` takes the architecture of an already built binary. Checked
+  against `readelf` on nine architectures in CI.
+- `Config.allow_arch_mismatch` (a new field), `Config::elf_warnings`.
+
 ### Fixed
 
 - The home page navigation wraps on phone widths instead of cutting the last item; the stale compiled `site/linuxpkg-web.js` is no longer tracked (the Pages workflow builds it).

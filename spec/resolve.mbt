@@ -162,5 +162,6 @@ pub fn Config::resolve(
     },
   )
   spec.validate()
+  self.check_elf_arch(files)
   spec
 }

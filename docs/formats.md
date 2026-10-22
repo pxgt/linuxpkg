@@ -145,6 +145,26 @@ signature (`1f 8b`, `fd 37 7a 58 5a 00`, `28 b5 2f fd`, plausible `.lzma` header
 - Reading and `verify` check `datahash`, every `APK-TOOLS.checksum.SHA1` record, the paths and the `.PKGINFO` basics; the
   signature itself is not verified (that needs the public key).
 
+## ELF headers (the `elf` package)
+
+Only the file header, the program headers and the `.dynamic` segment are read; section headers are not needed, so a stripped
+file gives the same answer.
+
+* `e_machine` and the class and byte order give the package architecture: 62 amd64, 183 arm64, 3 i386 (32 bit), 243 riscv64,
+  258 loong64, 22 s390x (big endian), 21 ppc64le (little endian), 8 mips64le (64 bit, little endian), 40 ARM (32 bit,
+  `armhf` when `e_flags & 0x400` (`EF_ARM_ABI_FLOAT_HARD`), else `armel`). Combinations that are no Linux package
+  architecture (x32 is machine 62 with class 32, n32 MIPS, big-endian ppc64) give no architecture.
+* A file is dynamic when it has `PT_INTERP`, a `DT_NEEDED` or a `DT_SONAME`. A static-pie executable has a `.dynamic` segment but
+  none of these, so it counts as static, like `file` says.
+* `DT_NEEDED` and `DT_SONAME` hold offsets into a string table whose address `DT_STRTAB` is a *virtual address*: it has to be
+  mapped to a file offset through the `PT_LOAD` segments.
+* Everything is bounds-checked; a damaged file gives `Truncated` or `Invalid` (names are limited to 4096 bytes, the dynamic
+  section to 16384 entries), never a crash.
+
+Checked against `readelf -h -l -d` on programs of nine architectures (dynamic and static, built by the Ubuntu cross
+compilers in CI), on binaries of this machine and on `/bin/ls` and friends of five distribution images; see
+[verification.md](verification.md).
+
 ## cpio (payload of an rpm)
 
 - `newc` (`070701`): 110-byte header of 13 eight-digit hex fields, NUL terminated name, header and data padded to

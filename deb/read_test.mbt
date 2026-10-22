@@ -95,6 +95,7 @@ test "the JSON report of a real deb" {
       "size": 0,
       "mtime": 1700000000,
       "link": null,
+      "elf": null,
     },
     {
       "path": "/etc",
@@ -105,6 +106,7 @@ test "the JSON report of a real deb" {
       "size": 0,
       "mtime": 1700000000,
       "link": null,
+      "elf": null,
     },
     {
       "path": "/etc/realdeb.conf",
@@ -115,6 +117,7 @@ test "the JSON report of a real deb" {
       "size": 10,
       "mtime": 1700000000,
       "link": null,
+      "elf": null,
     },
     {
       "path": "/usr",
@@ -125,6 +128,7 @@ test "the JSON report of a real deb" {
       "size": 0,
       "mtime": 1700000000,
       "link": null,
+      "elf": null,
     },
     {
       "path": "/usr/share",
@@ -135,6 +139,7 @@ test "the JSON report of a real deb" {
       "size": 0,
       "mtime": 1700000000,
       "link": null,
+      "elf": null,
     },
     {
       "path": "/usr/share/realdeb",
@@ -145,6 +150,7 @@ test "the JSON report of a real deb" {
       "size": 0,
       "mtime": 1700000000,
       "link": null,
+      "elf": null,
     },
     {
       "path": "/usr/share/realdeb/data.txt",
@@ -155,6 +161,7 @@ test "the JSON report of a real deb" {
       "size": 20,
       "mtime": 1700000000,
       "link": null,
+      "elf": null,
     },
     {
       "path": "/usr/share/realdeb/link",
@@ -165,6 +172,7 @@ test "the JSON report of a real deb" {
       "size": 0,
       "mtime": 1700000000,
       "link": "data.txt",
+      "elf": null,
     },
   ])
 }
