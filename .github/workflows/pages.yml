@@ -6,7 +6,7 @@ name: Pages
 # from the LINUXPKG_SIGNING_KEY secret and is only written to a temporary file.
 on:
   push:
-    branches: [main, feat/init-moon]
+    branches: [main]
   release:
     types: [published]
   workflow_dispatch:
