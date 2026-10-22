@@ -83,3 +83,8 @@ footer {
   max-width: 980px; margin: 0 auto; padding: 20px 16px 40px; color: var(--muted);
   display: flex; flex-wrap: wrap; gap: 6px 24px; justify-content: space-between; font-size: .9rem;
 }
+@media (max-width: 600px) {
+  .top { flex-wrap: wrap; gap: 8px 12px; }
+  .top #lang { order: 2; margin-left: auto; }
+  .top nav { order: 3; flex: 1 0 100%; flex-wrap: wrap; overflow: visible; gap: 6px 16px; }
+}
