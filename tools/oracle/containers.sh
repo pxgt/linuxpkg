@@ -662,7 +662,6 @@ arch_repo() {
     mkdir -p /tmp/ref && cp /work/plain/*.pkg.tar.* /tmp/ref/
     cd /tmp/ref
     repo-add demo.db.tar.gz *.pkg.tar.zst >/dev/null
-    repo-add demo.files.tar.gz *.pkg.tar.zst >/dev/null
     for kind in db files; do
       mkdir -p /tmp/ref-$kind /tmp/our-$kind
       bsdtar -xf /tmp/ref/demo.$kind.tar.gz -C /tmp/ref-$kind
