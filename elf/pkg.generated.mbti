@@ -1,0 +1,48 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Xpeng/linuxpkg/elf"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn is_elf(BytesView) -> Bool
+
+pub fn machine_name(Int32) -> String
+
+pub fn parse(BytesView) -> ElfInfo raise ElfError
+
+pub fn summary(BytesView) -> Json
+
+// Errors
+pub(all) suberror ElfError {
+  NotElf
+  Truncated(String)
+  Invalid(String)
+} derive(Eq, @debug.Debug)
+pub impl Show for ElfError
+
+// Types and methods
+pub(all) struct ElfInfo {
+  bits : Int32
+  little_endian : Bool
+  file_type : Int32
+  machine : Int32
+  flags : Int32
+  linkage : Linkage
+  interpreter : String?
+  needed : Array[String]
+  soname : String?
+} derive(Eq, @debug.Debug)
+pub fn ElfInfo::arch(Self) -> String?
+pub fn ElfInfo::describe(Self) -> String
+pub fn ElfInfo::to_json(Self) -> Json
+
+pub(all) enum Linkage {
+  Static
+  Dynamic
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
