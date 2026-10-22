@@ -98,7 +98,6 @@ fn arch_desc(
     }
     files.write_char('\n')
   }
-  files.write_char('\n')
   ("\{name}-\{version}", out.to_string() + "\u{0}" + files.to_string())
 }
 
