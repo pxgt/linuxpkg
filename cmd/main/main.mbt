@@ -20,6 +20,7 @@ const USAGE : String =
   #|  linuxpkg repo <dir> [--format deb|rpm|all] [--sign-key KEY]
   #|  linuxpkg key apk-pub|info <private key> [--name NAME] [--out DIR]
   #|  linuxpkg init [PATH] [--force]
+  #|  linuxpkg init --moon [DIR] [--bin PACKAGE] [--name NAME] [--arch ARCH]
   #|  linuxpkg --version
   #|
   #|Commands:
@@ -29,7 +30,8 @@ const USAGE : String =
   #|  repo     Write apt and dnf repository metadata for the packages in a directory.
   #|  key      Export the Alpine public key (apk-pub) of an RSA signing key, or show
   #|           which key a file holds (info).
-  #|  init     Write an example linuxpkg.json to edit.
+  #|  init     Write an example linuxpkg.json to edit, or (--moon) one for the
+  #|           native executable of the MoonBit project in DIR.
   #|
   #|Options:
   #|  -f, --format FORMAT  Package format to build or index: deb, rpm, arch, apk or all

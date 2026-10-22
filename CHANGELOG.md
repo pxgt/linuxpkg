@@ -8,6 +8,11 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `linuxpkg init --moon [DIR]` writes a `linuxpkg.json` for the native executable of a MoonBit project (reads `moon.mod` or
+  `moon.mod.json`, finds the `pkgtype(kind: "executable")` packages, `--bin` picks one).
+- Browser build: the `web` package compiles to JavaScript (`lp_inspect`, `lp_verify`, `lp_build`) and `site/` is a static
+  bilingual page on GitHub Pages that inspects, verifies and builds packages locally; CI compares its output with the
+  command line under Node.
 - `sign` package: OpenPGP signing and verification without gpg. `SigningKey` reads an unprotected version 4 RSA or
   Ed25519 private key (armored or binary) and writes binary or armored detached signatures and cleartext-signed
   messages; `PublicKeyring` checks them. The signature time is a parameter, so RSA and Ed25519 signatures are

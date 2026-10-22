@@ -797,3 +797,87 @@ test "repo writes Alpine and pacman repositories, signed or not" {
   assert_eq(run(["repo", repo, "--format", "arch", "--name", "bad name"]), 1)
   remove_tree(dir)
 }
+
+///|
+test "init --moon writes a configuration for the executable of a MoonBit project" {
+  let dir = "cli_initmoon_tmp"
+  ensure_dir(dir)
+  ensure_dir(dir + "/cmd")
+  ensure_dir(dir + "/cmd/main")
+  ensure_dir(dir + "/_build/native/release/build/cmd/main")
+  write_bytes(
+    dir + "/moon.mod",
+    @utf8.encode(
+      "// comment\nname = \"Xpeng/My_Tool\"\n\nversion = \"0.4.0\"\n\nrepository = \"https://github.com/pxgt/my_tool\"\n\nlicense = \"Apache-2.0\"\n\ndescription = \"A \\\"quoted\\\" tool\"\n\nimport {\n  \"moonbitlang/x@0.5.5\",\n}\n",
+    ),
+  )
+  write_bytes(
+    dir + "/cmd/main/moon.pkg",
+    b"import {\n}\n\npkgtype(kind: \"executable\")\n",
+  )
+  write_bytes(
+    dir + "/_build/native/release/build/cmd/main/main.exe",
+    b"#!/bin/sh\necho tool\n",
+  )
+  write_bytes(dir + "/README.md", b"readme\n")
+  write_bytes(dir + "/LICENSE", b"license\n")
+  assert_eq(run(["init", "--moon", dir]), 0)
+  let config = @spec.Config::parse(
+    @utf8.decode(read_bytes(dir + "/linuxpkg.json")),
+  )
+  assert_eq(config.name, "my-tool")
+  assert_eq(config.version, "0.4.0")
+  assert_eq(config.description, "A \"quoted\" tool")
+  assert_eq(config.license, Some("Apache-2.0"))
+  assert_eq(config.homepage, Some("https://github.com/pxgt/my_tool"))
+  assert_eq(config.contents.length(), 3)
+  // The generated configuration builds, in every format.
+  assert_eq(run(["build", dir + "/linuxpkg.json", "--out", dir + "/out"]), 0)
+  let deb = @deb.read(read_bytes(dir + "/out/my-tool_0.4.0-1_amd64.deb"))
+  assert_true(deb.files.iter().any(f => f.path.has_suffix("usr/bin/my-tool")))
+  assert_true(
+    deb.files
+    .iter()
+    .any(f => f.path.has_suffix("usr/share/doc/my-tool/copyright")),
+  )
+  // Existing file, forcing, name and architecture.
+  assert_eq(run(["init", "--moon", dir]), 1)
+  assert_eq(
+    run(["init", "--moon", dir, "--force", "--name", "tool", "--arch", "arm64"]),
+    0,
+  )
+  let again = @spec.Config::parse(
+    @utf8.decode(read_bytes(dir + "/linuxpkg.json")),
+  )
+  assert_eq(again.name, "tool")
+  assert_eq(again.arch, @spec.Arch::Arm64)
+  // Several executables: a choice is needed.
+  ensure_dir(dir + "/cmd/other")
+  write_bytes(dir + "/cmd/other/moon.pkg", b"pkgtype(kind: \"executable\")\n")
+  assert_eq(run(["init", "--moon", dir, "--force"]), 1)
+  assert_eq(run(["init", "--moon", dir, "--force", "--bin", "cmd/other"]), 0)
+  let other = @spec.Config::parse(
+    @utf8.decode(read_bytes(dir + "/linuxpkg.json")),
+  )
+  assert_true(
+    other.contents[0].src
+    is Some("_build/native/release/build/cmd/other/other.exe"),
+  )
+  assert_eq(run(["init", "--moon", dir, "--force", "--bin", "cmd/none"]), 1)
+  // The older moon.mod.json.
+  write_bytes(
+    dir + "/moon.mod.json",
+    b"{\"name\": \"a/b\", \"version\": \"1.2.3\"}",
+  )
+  @fs.remove_file(dir + "/moon.mod")
+  assert_eq(run(["init", "--moon", dir, "--force", "--bin", "cmd/main"]), 0)
+  let old = @spec.Config::parse(
+    @utf8.decode(read_bytes(dir + "/linuxpkg.json")),
+  )
+  assert_eq(old.version, "1.2.3")
+  // Not a MoonBit project.
+  @fs.remove_file(dir + "/moon.mod.json")
+  assert_eq(run(["init", "--moon", dir, "--force"]), 1)
+  assert_eq(run(["init", "--moon", dir, "extra"]), 1)
+  remove_tree(dir)
+}
