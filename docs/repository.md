@@ -65,7 +65,7 @@ to them) and writes, as `repo-add` does:
 
 | File | Content |
 |---|---|
-| `NAME.db.tar.gz`, `NAME.db` | a gzip tar with `<pkgname>-<pkgver>/desc` per package: `%FILENAME%`, `%NAME%`, `%BASE%`, `%VERSION%`, `%DESC%`, `%CSIZE%`, `%ISIZE%`, `%MD5SUM%`, `%SHA256SUM%`, `%PGPSIG%` (when a `.sig` exists), `%URL%`, `%LICENSE%`, `%ARCH%`, `%BUILDDATE%`, `%PACKAGER%`, `%REPLACES%`, `%CONFLICTS%`, `%PROVIDES%`, `%DEPENDS%`, `%OPTDEPENDS%` |
+| `NAME.db.tar.gz`, `NAME.db` | a gzip tar with `<pkgname>-<pkgver>/desc` per package: `%FILENAME%`, `%NAME%`, `%BASE%`, `%VERSION%`, `%DESC%`, `%CSIZE%`, `%ISIZE%`, `%SHA256SUM%`, `%PGPSIG%` (when a `.sig` exists), `%URL%`, `%LICENSE%`, `%ARCH%`, `%BUILDDATE%`, `%PACKAGER%`, `%REPLACES%`, `%CONFLICTS%`, `%PROVIDES%`, `%DEPENDS%`, `%OPTDEPENDS%` |
 | `NAME.files.tar.gz`, `NAME.files` | the same plus a `files` list (`%FILES%`) per package |
 
 `NAME.db` is a copy of `NAME.db.tar.gz`, not a link, because a static web server (GitHub Pages) has no symbolic links.

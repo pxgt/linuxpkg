@@ -68,7 +68,6 @@ fn arch_desc(
   desc_section(out, "GROUPS", pkg.fields("group"))
   desc_one(out, "CSIZE", Some(file.data.length().to_string()))
   desc_one(out, "ISIZE", pkg.field("size"))
-  desc_one(out, "MD5SUM", Some(md5_hex(file.data)))
   desc_one(out, "SHA256SUM", Some(sha256_hex(file.data)))
   match signature {
     Some(sig) => desc_one(out, "PGPSIG", Some(@base64.encode(sig[:])))
