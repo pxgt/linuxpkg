@@ -6,7 +6,7 @@ Linux runners (x86_64 and arm64).
 
 ```yaml
 - uses: actions/checkout@v5
-- uses: pxgt/linuxpkg@v0.4.0
+- uses: pxgt/linuxpkg@v0.5.0
   with:
     config: linuxpkg.json        # default
     format: all                  # deb, rpm, arch, apk or all
