@@ -6,6 +6,8 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-22
+
 ### Added
 
 - **nFPM configurations**: `linuxpkg build nfpm.yaml` and the new `linuxpkg convert nfpm.yaml [--format deb|rpm|apk|arch] [-o FILE]`
