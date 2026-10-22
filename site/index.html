@@ -90,10 +90,34 @@
 <section id="install" class="panel">
   <h2 data-i18n="install_title">Install</h2>
   <div id="install-body">
-    <p data-i18n="install_cli">The command line is one static binary (Linux x86_64 and aarch64) or <code>moonx Xpeng/linuxpkg/cmd/main</code> anywhere MoonBit runs; as a library: <code>moon add Xpeng/linuxpkg</code>.</p>
+    <p data-i18n="install_repos">linuxpkg is published as a signed package in its own repositories, built by linuxpkg itself. Pick your family; the commands are the real ones, checked in CI in each distribution.</p>
+    <details open><summary>Debian, Ubuntu</summary>
+<pre><code>sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://pxgt.github.io/linuxpkg/linuxpkg.asc | sudo tee /etc/apt/keyrings/linuxpkg.asc &gt;/dev/null
+echo "deb [signed-by=/etc/apt/keyrings/linuxpkg.asc] https://pxgt.github.io/linuxpkg/apt ./" | sudo tee /etc/apt/sources.list.d/linuxpkg.list
+sudo apt update &amp;&amp; sudo apt install linuxpkg</code></pre></details>
+    <details><summary>Fedora, openEuler, RHEL family</summary>
+<pre><code>sudo curl -fsSL https://pxgt.github.io/linuxpkg/rpm/linuxpkg.repo -o /etc/yum.repos.d/linuxpkg.repo
+sudo dnf install linuxpkg</code></pre></details>
+    <details><summary>Arch Linux</summary>
+<pre><code>curl -fsSL https://pxgt.github.io/linuxpkg/linuxpkg.asc | sudo pacman-key --add -
+sudo pacman-key --lsign-key D6298A33CA44D77415DC1187ECDA980444350858
+printf '
+[linuxpkg]
+SigLevel = Required DatabaseRequired
+Server = https://pxgt.github.io/linuxpkg/arch/$arch
+' | sudo tee -a /etc/pacman.conf
+sudo pacman -Sy linuxpkg</code></pre></details>
+    <details><summary>Alpine Linux</summary>
+<pre><code>sudo curl -fsSL https://pxgt.github.io/linuxpkg/linuxpkg.rsa.pub -o /etc/apk/keys/linuxpkg.rsa.pub
+echo https://pxgt.github.io/linuxpkg/alpine | sudo tee -a /etc/apk/repositories
+sudo apk add linuxpkg</code></pre></details>
+    <p><span data-i18n="install_key">Signing key fingerprint:</span> <code>D629 8A33 CA44 D774 15DC 1187 ECDA 9804 4435 0858</code></p>
+    <h3 data-i18n="install_other">Other ways</h3>
+    <p data-i18n="install_cli">The command line is one static binary (Linux x86_64 and aarch64) or moonx Xpeng/linuxpkg/cmd/main anywhere MoonBit runs; as a library: moon add Xpeng/linuxpkg.</p>
     <pre><code>moon add Xpeng/linuxpkg
 moonx Xpeng/linuxpkg/cmd/main -- build linuxpkg.json --format all --sign-key release.key</code></pre>
-    <p data-i18n="install_repos_soon">Signed apt, dnf, pacman and apk repositories of linuxpkg itself are published with the next release; this section will list the commands.</p>
+    <p><a href="https://github.com/pxgt/linuxpkg/blob/main/docs/github-action.md" data-i18n="install_action">GitHub Action: build and sign packages in your own workflow</a></p>
   </div>
 </section>
 

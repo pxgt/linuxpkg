@@ -1,11 +1,12 @@
 name: Pages
 
-# Builds the browser library (web/ compiled to JavaScript) and the static page in site/,
-# and publishes them on GitHub Pages. Build outputs are never committed.
+# Publishes https://pxgt.github.io/linuxpkg/ : the static page with the in-browser tools (web/ compiled
+# to JavaScript) and signed package repositories (apt, dnf, pacman, apk) with linuxpkg itself and
+# moonthrift, all built here by linuxpkg. Build outputs are never committed; the signing key comes
+# from the LINUXPKG_SIGNING_KEY secret and is only written to a temporary file.
 on:
   push:
-    branches: [main]
-    paths: ["site/**", "web/**", "spec/**", "compress/**", "deb/**", "rpm/**", "arch/**", "apk/**", "sign/**", "archive/**", ".github/workflows/pages.yml"]
+    branches: [main, feat/init-moon]
   release:
     types: [published]
   workflow_dispatch:
@@ -20,11 +21,94 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  packages:
+    name: packages (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, arch: x86_64, deb: amd64 }
+          - { os: ubuntu-24.04-arm, arch: aarch64, deb: arm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Build the static linuxpkg
+        run: |
+          moon update
+          printf '\noptions(\n  link: { "native": { "cc-link-flags": "-static" } },\n)\n' >> cmd/main/moon.pkg
+          moon build --target native --release cmd/main
+          mkdir -p stage out
+          cp _build/native/release/build/cmd/main/main.exe stage/linuxpkg
+          chmod +x stage/linuxpkg
+          stage/linuxpkg --version
+
+      - name: Package linuxpkg with linuxpkg, signed
+        env:
+          SIGN_KEY: ${{ secrets.LINUXPKG_SIGNING_KEY }}
+        run: |
+          [ -n "$SIGN_KEY" ] || { echo "::error::LINUXPKG_SIGNING_KEY is not available"; exit 1; }
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          keyfile="$RUNNER_TEMP/signing.key"
+          umask 077
+          printf '%s\n' "$SIGN_KEY" > "$keyfile"
+          python3 - "$PWD" "${{ matrix.deb }}" <<'PY'
+          import json, sys
+          root, arch = sys.argv[1:3]
+          config = json.load(open(root + "/examples/self/linuxpkg.json"))
+          config["arch"] = arch
+          for item in config["contents"]:
+              if item["dst"] == "/usr/bin/linuxpkg":
+                  item["src"] = root + "/stage/linuxpkg"
+              else:
+                  item["src"] = root + "/" + item["src"].replace("../../", "")
+          json.dump(config, open(root + "/self.json", "w"), indent=2)
+          PY
+          stage/linuxpkg build self.json --out out --sign-key "$keyfile" --apk-key-name linuxpkg.rsa.pub
+          rm -f "$keyfile"
+          ls -l out
+
+      - name: Package moonthrift (latest release) with linuxpkg init --moon
+        continue-on-error: true
+        env:
+          SIGN_KEY: ${{ secrets.LINUXPKG_SIGNING_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(gh api repos/pxgt/moonthrift/releases/latest --jq .tag_name)"
+          echo "moonthrift $tag"
+          git clone --quiet --depth 1 --branch "$tag" https://github.com/pxgt/moonthrift moonthrift-src
+          cd moonthrift-src
+          printf '\noptions(\n  link: { "native": { "cc-link-flags": "-static" } },\n)\n' >> cmd/main/moon.pkg
+          moon update
+          moon build --target native --release
+          ../stage/linuxpkg init --moon . --arch "${{ matrix.deb }}"
+          sed -i 's|"maintainer": ".*"|"maintainer": "pxgt <133531533+pxgt@users.noreply.github.com>"|' linuxpkg.json
+          keyfile="$RUNNER_TEMP/signing2.key"
+          umask 077
+          printf '%s\n' "$SIGN_KEY" > "$keyfile"
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          ../stage/linuxpkg build linuxpkg.json --out ../out --sign-key "$keyfile" --apk-key-name linuxpkg.rsa.pub
+          rm -f "$keyfile"
+          ls -l ../out
+
+      - name: Keep the packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          path: |
+            out/*
+            stage/linuxpkg
+
+  site:
+    name: assemble the site
+    needs: packages
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Check out source
         uses: actions/checkout@v5
@@ -38,14 +122,99 @@ jobs:
         run: |
           moon update
           moon build --target js --release web
-          cp _build/js/release/build/web/web.js site/linuxpkg-web.js
-          ls -l site
+          mkdir -p public
+          cp site/index.html site/style.css site/app.js site/linuxpkg.asc site/linuxpkg.rsa.pub public/
+          cp _build/js/release/build/web/web.js public/linuxpkg-web.js
+
+      - name: Download the packages
+        uses: actions/download-artifact@v5
+        with:
+          pattern: packages-*
+          path: downloaded
+
+      - name: Build the signed repositories
+        env:
+          SIGN_KEY: ${{ secrets.LINUXPKG_SIGNING_KEY }}
+        run: |
+          mkdir -p pkgs/x86_64 pkgs/aarch64
+          cp downloaded/packages-x86_64/out/* pkgs/x86_64/
+          cp downloaded/packages-aarch64/out/* pkgs/aarch64/
+          chmod +x downloaded/packages-x86_64/stage/linuxpkg
+          keyfile="$RUNNER_TEMP/signing.key"
+          umask 077
+          printf '%s\n' "$SIGN_KEY" > "$keyfile"
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          tools/assemble_site.sh "$PWD/downloaded/packages-x86_64/stage/linuxpkg" "$PWD/pkgs" "$PWD/public" "$keyfile"
+          rm -f "$keyfile"
 
       - name: Upload the site
         uses: actions/upload-pages-artifact@v4
         with:
-          path: site
+          path: public
 
+  deploy:
+    needs: site
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  install:
+    name: install from https in ${{ matrix.image }}
+    needs: deploy
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: "debian:12", family: deb }
+          - { image: "ubuntu:24.04", family: deb }
+          - { image: "fedora:41", family: rpm }
+          - { image: "openeuler/openeuler:24.03-lts", family: rpm }
+          - { image: "archlinux:latest", family: arch }
+          - { image: "alpine:3.20", family: apk }
+    steps:
+      - name: Check out source (for the example)
+        uses: actions/checkout@v5
+
+      - name: Add the repository, install, run
+        run: |
+          docker run --rm -v "$PWD/examples/hello:/hello:ro" "${{ matrix.image }}" sh -ec '
+            BASE=https://pxgt.github.io/linuxpkg
+            case "${{ matrix.family }}" in
+              deb)
+                apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null
+                mkdir -p /etc/apt/keyrings
+                curl -fsSL "$BASE/linuxpkg.asc" -o /etc/apt/keyrings/linuxpkg.asc
+                echo "deb [signed-by=/etc/apt/keyrings/linuxpkg.asc] $BASE/apt ./" > /etc/apt/sources.list.d/linuxpkg.list
+                apt-get update
+                apt-get install -y linuxpkg
+                ;;
+              rpm)
+                curl -fsSL "$BASE/rpm/linuxpkg.repo" -o /etc/yum.repos.d/linuxpkg.repo
+                dnf --disablerepo="*" --enablerepo=linuxpkg install -y linuxpkg
+                ;;
+              arch)
+                curl -fsSL "$BASE/linuxpkg.asc" -o /tmp/linuxpkg.asc
+                pacman-key --init
+                pacman-key --add /tmp/linuxpkg.asc
+                pacman-key --lsign-key D6298A33CA44D77415DC1187ECDA980444350858
+                printf "\n[linuxpkg]\nSigLevel = Required DatabaseRequired\nServer = $BASE/arch/\$arch\n" >> /etc/pacman.conf
+                pacman -Sy --noconfirm linuxpkg
+                ;;
+              apk)
+                apk add --no-cache curl >/dev/null
+                curl -fsSL "$BASE/linuxpkg.rsa.pub" -o /etc/apk/keys/linuxpkg.rsa.pub
+                echo "$BASE/alpine" >> /etc/apk/repositories
+                apk add linuxpkg
+                ;;
+            esac
+            linuxpkg --version
+            mkdir -p /tmp/out
+            cd /hello && linuxpkg build linuxpkg.json --out /tmp/out
+            linuxpkg verify /tmp/out/hello_1.0.0-1_all.deb
+          '
