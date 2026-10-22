@@ -8,6 +8,7 @@ All notable changes are recorded here. The format follows
 
 ### Fixed
 
+- The home page navigation wraps on phone widths instead of cutting the last item; the stale compiled `site/linuxpkg-web.js` is no longer tracked (the Pages workflow builds it).
 - Release workflow: the Alpine asset names now contain the architecture (`linuxpkg-<version>-r1.x86_64.apk`,
   `...aarch64.apk`); before, both builds wrote the same name and one asset of v0.4.0 was damaged. The workflow can be
   started by hand for an existing tag to replace the assets of that release.
