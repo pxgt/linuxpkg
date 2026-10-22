@@ -40,6 +40,21 @@ part of linuxpkg: about 0.5 MB/s for xz and 0.3 MB/s for zstd, and the zstd outp
 [formats.md](formats.md)). **gzip stays the default for that reason**; use xz or zstd when the target distribution asks for it
 or the package is small.
 
+## Small packages against nFPM
+
+A build of an nFPM acceptance configuration (`core.complex.yaml`: a dozen small files, scripts, one pre-release version) with the
+native linuxpkg binary and with nFPM v2.48.0 (Go), in WSL2 Ubuntu 22.04, mean of 40 runs, process start included:
+
+| Format | nFPM v2.48.0 | linuxpkg (native) |
+|---|---|---|
+| deb | 113 ms | 197 ms |
+| rpm | 292 ms | 257 ms |
+
+For packages of this size the time is mostly the start of the program and the compression of a few kilobytes, not the packing
+itself; nFPM is faster for the deb here, linuxpkg for the rpm (which also computes SHA-256 digests of every file and of the header).
+Nothing in these numbers is a reason to choose one tool over the other; `tools/nfpm/check.sh` compares what the packages contain
+([nfpm.md](nfpm.md)).
+
 ## What to expect
 
 * Time grows linearly with the input; gzip builds run at roughly 60 MB/s on native and 3–4 MB/s on wasm-gc.
