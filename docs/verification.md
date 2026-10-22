@@ -9,7 +9,7 @@ moon test --target wasm-gc     # also: js, wasm
 moon test --target native      # Linux or WSL (Windows needs MSVC for native)
 ```
 
-453 tests on every backend (property tests with a fixed-seed generator for tar, ar, cpio, rpm headers and compression; signature tests with golden values that make the four backends prove they write the same bytes), including fixed-byte expectations, archives written by GNU tar, GNU cpio, `dpkg-deb` and `rpmbuild`
+496 tests on every backend (property tests with a fixed-seed generator for tar, ar, cpio, rpm headers and compression; signature tests with golden values that make the four backends prove they write the same bytes), including fixed-byte expectations, archives written by GNU tar, GNU cpio, `dpkg-deb` and `rpmbuild`
 (fixtures under `*/fixtures_test.mbt`), and hostile input: every truncation and every flipped byte of a valid
 tar, ar, cpio, deb and rpm must produce a value or a typed error, never a crash.
 
@@ -72,6 +72,20 @@ files, for the committed samples and for binaries of the machine. Then it builds
 `--allow-arch-mismatch`, and checks that `inspect` shows the CPU. The `containers` job also copies `/bin/ls`, `bash`, `perl` and
 `busybox` out of the Debian, Ubuntu, Fedora, Arch and Alpine images and compares them with `readelf` on the host.
 `tools/elf/make_samples.sh` and `tools/elf/samples_to_mbt.py` regenerate the committed samples and the test file that holds them.
+
+## nFPM configurations
+
+`tools/nfpm/check.sh LINUXPKG` (run by the `oracle` job of CI) downloads nFPM v2.48.0 from its GitHub release, checks the
+checksum, builds the 29 configurations of `testdata/nfpm/configs` (nFPM's own acceptance configurations, unchanged) for deb, rpm,
+apk and Arch Linux with nFPM and with linuxpkg in a copy of `testdata/nfpm/tree`, reads every package back with `dpkg-deb`,
+`rpm -qp` and `tar` (`tools/nfpm/facts.py`: control fields, rpm tags, relations, files with mode, owner, link target and rpm file
+flags, `.PKGINFO`) and compares them (`tools/nfpm/compare.py`). The run fails on any difference that is not listed in
+`tools/nfpm/expected.txt` with its reason, and on a listed difference that no longer happens. The table of the explained
+differences is in [nfpm.md](nfpm.md). To look at a single configuration:
+
+```
+python3 tools/nfpm/compare.py ./nfpm ./linuxpkg testdata/nfpm/configs testdata/nfpm/tree --config core.complex --formats deb --show
+```
 
 ## Distribution containers
 
