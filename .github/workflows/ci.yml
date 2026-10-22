@@ -118,3 +118,50 @@ jobs:
 
       - name: Install the packages in real distribution containers
         run: tools/oracle/containers.sh
+
+  action:
+    name: GitHub Action (self test)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Build the binary the action will use
+        run: |
+          moon update
+          moon build --target native --release cmd/main
+
+      - name: Read the test-only signing key
+        id: key
+        run: |
+          {
+            echo "key<<LINUXPKG_KEY_EOF"
+            cat testdata/sign/test-only-rsa2048.sec.asc
+            echo "LINUXPKG_KEY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run the action
+        id: pkg
+        uses: ./
+        with:
+          config: examples/hello/linuxpkg.json
+          format: all
+          out: action-out
+          sign-key: ${{ steps.key.outputs.key }}
+          apk-key-name: test.rsa.pub
+          binary-path: _build/native/release/build/cmd/main/main.exe
+
+      - name: Check what the action produced
+        run: |
+          echo "${{ steps.pkg.outputs.files }}"
+          test "$(echo "${{ steps.pkg.outputs.files }}" | wc -l)" -ge 5
+          bin=_build/native/release/build/cmd/main/main.exe
+          $bin verify action-out/hello-1.0.0-1.noarch.rpm --keyring testdata/sign/test-only-rsa2048.pub.asc
+          $bin verify action-out/hello-1.0.0-1-any.pkg.tar.zst --keyring testdata/sign/test-only-rsa2048.pub.asc
+          $bin verify action-out/hello-1.0.0-r1.apk --keyring testdata/sign/test-only-rsa2048.pub.asc
+          $bin verify action-out/hello_1.0.0-1_all.deb
