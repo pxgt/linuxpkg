@@ -1,0 +1,113 @@
+name: "linuxpkg"
+description: "Build, sign and check deb, rpm, Arch and Alpine packages (and repositories) from one linuxpkg.json, without dpkg or rpmbuild."
+author: "pxgt"
+branding:
+  icon: package
+  color: blue
+
+inputs:
+  config:
+    description: "Path of the linuxpkg.json to build."
+    default: "linuxpkg.json"
+  format:
+    description: "deb, rpm, arch, apk or all."
+    default: "all"
+  out:
+    description: "Directory for the packages."
+    default: "dist"
+  compression:
+    description: "none, gzip, xz or zstd; empty keeps what the configuration says."
+    default: ""
+  sign-key:
+    description: "OpenPGP private key (armored, no passphrase) that signs rpm, Arch and Alpine packages. Pass a secret; it is never printed."
+    default: ""
+  apk-key-name:
+    description: "File name of the Alpine public key in apk signatures, for example myproject.rsa.pub."
+    default: ""
+  version:
+    description: "linuxpkg version to download (for example 0.5.0). Empty: the version of this action (the tag after @)."
+    default: ""
+  binary-path:
+    description: "Use this linuxpkg binary instead of downloading a release (for tests)."
+    default: ""
+
+outputs:
+  files:
+    description: "The files written to the output directory, one per line."
+    value: ${{ steps.build.outputs.files }}
+  version:
+    description: "The linuxpkg version that was used."
+    value: ${{ steps.build.outputs.version }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Get linuxpkg
+      id: get
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_BINARY: ${{ inputs.binary-path }}
+        ACTION_REF: ${{ github.action_ref }}
+      run: |
+        set -euo pipefail
+        if [ -n "$INPUT_BINARY" ]; then
+          echo "bin=$(cd "$(dirname "$INPUT_BINARY")" && pwd)/$(basename "$INPUT_BINARY")" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if [ "$(uname -s)" != Linux ]; then
+          echo "::error::The linuxpkg action downloads a static Linux binary; run it on a Linux runner."
+          exit 1
+        fi
+        version="$INPUT_VERSION"
+        if [ -z "$version" ]; then version="${ACTION_REF#v}"; fi
+        case "$version" in
+          [0-9]*) ;;
+          *) echo "::error::Give the action a version tag (uses: pxgt/linuxpkg@v0.5.0) or set the version input."; exit 1 ;;
+        esac
+        case "$(uname -m)" in
+          x86_64) arch=x86_64 ;;
+          aarch64|arm64) arch=aarch64 ;;
+          *) echo "::error::Unsupported architecture $(uname -m)"; exit 1 ;;
+        esac
+        base="https://github.com/pxgt/linuxpkg/releases/download/v${version}"
+        dir="$RUNNER_TEMP/linuxpkg-${version}"
+        mkdir -p "$dir"
+        name="linuxpkg-${version}-linux-${arch}.tar.gz"
+        curl -fsSL -o "$dir/$name" "$base/$name"
+        curl -fsSL -o "$dir/SHA256SUMS" "$base/SHA256SUMS"
+        (cd "$dir" && grep " $name\$" SHA256SUMS | sha256sum -c -)
+        tar -xzf "$dir/$name" -C "$dir"
+        chmod +x "$dir/linuxpkg"
+        echo "bin=$dir/linuxpkg" >> "$GITHUB_OUTPUT"
+
+    - name: Build the packages
+      id: build
+      shell: bash
+      env:
+        LINUXPKG: ${{ steps.get.outputs.bin }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_OUT: ${{ inputs.out }}
+        INPUT_COMPRESSION: ${{ inputs.compression }}
+        INPUT_APK_KEY_NAME: ${{ inputs.apk-key-name }}
+        SIGN_KEY: ${{ inputs.sign-key }}
+      run: |
+        set -euo pipefail
+        args=(build "$INPUT_CONFIG" --format "$INPUT_FORMAT" --out "$INPUT_OUT")
+        if [ -n "$INPUT_COMPRESSION" ]; then args+=(--compression "$INPUT_COMPRESSION"); fi
+        if [ -n "$INPUT_APK_KEY_NAME" ]; then args+=(--apk-key-name "$INPUT_APK_KEY_NAME"); fi
+        if [ -n "$SIGN_KEY" ]; then
+          keyfile="$(mktemp)"
+          trap 'rm -f "$keyfile"' EXIT
+          chmod 600 "$keyfile"
+          printf '%s\n' "$SIGN_KEY" > "$keyfile"
+          args+=(--sign-key "$keyfile")
+        fi
+        "$LINUXPKG" "${args[@]}"
+        {
+          echo "version=$("$LINUXPKG" --version | awk '{print $2}')"
+          echo "files<<LINUXPKG_EOF"
+          find "$INPUT_OUT" -type f | sort
+          echo "LINUXPKG_EOF"
+        } >> "$GITHUB_OUTPUT"

@@ -1,0 +1,48 @@
+# Example: publish a MoonBit command line program as deb, rpm, Arch and Alpine packages with every GitHub Release.
+#
+# Once, on your machine:   linuxpkg init --moon .      (writes linuxpkg.json; set "maintainer" in it and commit it)
+# Copy this file to .github/workflows/release.yml of your project and add the secret PACKAGE_SIGNING_KEY,
+# an armored OpenPGP private key without passphrase (gpg --armor --export-secret-keys <id>).
+# Publishing a release then attaches the signed packages and a SHA256SUMS file to it.
+name: Release packages
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  packages:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Build a static native binary
+        run: |
+          moon update
+          # A static binary runs on every distribution, Alpine (musl) included. The option is
+          # appended here and not committed because macOS cannot link statically.
+          printf '\noptions(\n  link: { "native": { "cc-link-flags": "-static" } },\n)\n' >> cmd/main/moon.pkg
+          moon build --target native --release
+
+      - name: Build and sign the packages
+        uses: pxgt/linuxpkg@v0.5.0
+        with:
+          config: linuxpkg.json
+          format: all
+          out: dist
+          sign-key: ${{ secrets.PACKAGE_SIGNING_KEY }}
+
+      - name: Attach them to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd dist && sha256sum * > SHA256SUMS)
+          gh release upload "${{ github.event.release.tag_name }}" dist/* --clobber

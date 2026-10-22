@@ -1,0 +1,20 @@
+import {
+  "Xpeng/linuxpkg/spec",
+  "Xpeng/linuxpkg/compress",
+  "Xpeng/linuxpkg/deb",
+  "Xpeng/linuxpkg/rpm",
+  "Xpeng/linuxpkg/arch",
+  "Xpeng/linuxpkg/apk",
+  "Xpeng/linuxpkg/sign",
+  "moonbitlang/core/encoding/base64",
+  "moonbitlang/core/json",
+}
+
+options(
+  link: {
+    "js": {
+      "exports": [ "lp_inspect", "lp_verify", "lp_build" ],
+      "format": "iife",
+    },
+  },
+)

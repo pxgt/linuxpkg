@@ -1,0 +1,17 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Xpeng/linuxpkg/web"
+
+// Values
+pub fn lp_build(String, String, String, String, Double) -> String
+
+pub fn lp_inspect(String, String) -> String
+
+pub fn lp_verify(String, String, String) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

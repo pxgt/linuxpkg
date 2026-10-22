@@ -21,10 +21,14 @@ const SAMPLE_CONFIG : String =
 
 ///|
 fn cmd_init(args : Array[String]) -> Int32 raise CliError {
-  let options = parse_options(args, Map([]), {
-    "--force": "force",
-    "-f": "force",
-  })
+  let options = parse_options(
+    args,
+    { "--bin": "bin", "--name": "name", "--arch": "arch" },
+    { "--force": "force", "-f": "force", "--moon": "moon" },
+  )
+  if options.flag("moon") {
+    return init_moon(options)
+  }
   let path = match options.positional {
     [] => "linuxpkg.json"
     [path] => path

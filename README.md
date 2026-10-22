@@ -24,6 +24,8 @@ linuxpkg 是一个**纯 MoonBit** 实现的 Linux 软件包构建与检查工具
 - **可复现构建**：同样的输入逐字节产出同样的包（支持 `SOURCE_DATE_EPOCH`）。
 - 核心库不碰文件系统，可在 wasm / wasm-gc / js / native 四个后端运行；只有命令行读写文件。
 
+> 在线试用（浏览器里检查、校验、打包，文件不上传）与带签名的软件源：<https://pxgt.github.io/linuxpkg/>
+
 ## 当前功能
 
 | 功能 | 状态 |
@@ -42,6 +44,10 @@ linuxpkg 是一个**纯 MoonBit** 实现的 Linux 软件包构建与检查工具
 | **Arch Linux 包**（`.pkg.tar.zst`：`.PKGINFO`、带 SHA-256 的 `.MTREE`、`.INSTALL`；构建、检查、校验，`pacman -U` 能装、`pacman -Qkk` 无差异） | ✅ |
 | **Alpine 包**（`.apk`：控制段、数据段、`datahash`、每个文件的 SHA-1；构建、检查、校验，`apk add --allow-untrusted` 能装、`apk audit` 无差异） | ✅ |
 | **软件源**：`linuxpkg repo <目录>` 生成 apt 平铺仓库（Packages / Packages.gz / Packages.xz / Release）和 dnf 仓库（repodata，与 createrepo_c 输出一致），别人直接 `apt install` / `dnf install` | ✅ |
+| **签名**（OpenPGP，RSA 或 Ed25519，纯 MoonBit 实现，同样输入逐字节相同的签名）：apt `InRelease` / `Release.gpg`、dnf `repomd.xml.asc`、rpm 包头签名（`rpm -K` 显示 OK）、Arch `.sig`、Alpine `.SIGN.RSA256`；`verify --keyring` 校验；`rpmsign`、`abuild-sign`、`gpg` 做的签名也能校验 | ✅ |
+| **软件源**扩展到四大家族：`repo --format arch`（`NAME.db`，与 `repo-add` 一致）、`--format apk`（`APKINDEX.tar.gz`，与 `apk index` 一致），签名后 `pacman -Sy`、`apk add` 不加任何"信任所有"开关即可安装 | ✅ |
+| `linuxpkg init --moon`：读 `moon.mod`，为 MoonBit 项目的可执行包生成配置 | ✅ |
+| 网页版（`web` 包编成 JavaScript）：在浏览器里检查、校验、打包，文件不上传；GitHub Action（`pxgt/linuxpkg`）；Linux 静态二进制和自打包的 deb/rpm/pkg.tar.zst/apk | ✅ |
 | 有界解压：xz、zstd、gzip 炸弹在解压前或解压中就被上限截住（默认 1 GiB） | ✅ |
 
 ## 安装与构建
@@ -82,7 +88,11 @@ linuxpkg build examples/hello/linuxpkg.json --compression zstd --out dist-zstd  
 linuxpkg inspect dist/hello_1.0.0-1_all.deb      # 看元数据和文件列表（也认 .rpm、.apk 和 .pkg.tar.*）
 linuxpkg inspect dist/hello-1.0.0-1.noarch.rpm --json
 linuxpkg verify dist/hello-1.0.0-1.noarch.rpm    # 退出码 0 表示通过
-linuxpkg repo dist                               # 给 dist 里的包生成 apt / dnf 软件源索引
+linuxpkg repo dist                               # 给 dist 里的包生成 apt / dnf / pacman / apk 软件源索引
+linuxpkg build examples/hello/linuxpkg.json --sign-key release.key --out dist   # rpm、Arch、Alpine 包签名（deb 靠软件源签名）
+linuxpkg repo dist --sign-key release.key        # 软件源签名：InRelease、repomd.xml.asc、数据库 .sig、APKINDEX 签名
+linuxpkg verify dist --keyring release.pub.asc   # 检查软件源或包的签名，退出码 2 表示签名缺失或不对
+linuxpkg init --moon .                           # 为当前 MoonBit 项目生成 linuxpkg.json
 ```
 
 退出码：`0` 成功；`1` 用法错误、文件读不了、不是包、或用了不支持的压缩；`2` `verify` 发现包损坏或被篡改。
@@ -157,16 +167,16 @@ linuxpkg repo dist                               # 给 dist 里的包生成 apt 
 - 恶意输入：tar、ar、cpio、deb、rpm 的每一种截断和每个字节翻转（gzip / xz / zstd / 不压缩各测一遍）都只会得到结果或明确的错误，不会崩溃；
   gzip、xz、zstd 炸弹都被 1 GiB 默认上限截住（xz 和 zstd 在解压前就从块头 / 帧头算出解压后大小）。
 
-文档：[配置参考](docs/config.md)、[格式说明与和规范的差异](docs/formats.md)、[如何复现所有验证](docs/verification.md)、
+文档：[教程（5 分钟发布到四大家族）](docs/tutorial.md)、[签名](docs/signing.md)、[软件源](docs/repository.md)、[GitHub Action](docs/github-action.md)、[配置参考](docs/config.md)、[格式说明与和规范的差异](docs/formats.md)、[如何复现所有验证](docs/verification.md)、
 [贡献指南](CONTRIBUTING.md)、[安全策略](SECURITY.md)。
 
 ## 范围与不做的事
 
 不做：
 
-- 包签名和仓库签名（GPG / PGP）：`repo` 命令不签名，[docs/repository.md](docs/repository.md) 给出用外部 `gpg` 签名的命令
 - bzip2 压缩（生态里没有可用的纯 MoonBit 实现；读到会明确报 `unsupported`）。`.lzma` 只能读，不能写。
-- 源码包（`.dsc`、`.src.rpm`）、Arch / Alpine 的软件源数据库（`repo-add`、`APKINDEX`）、包签名
+- 带口令的私钥（明确报错，请先去掉口令或在 CI 里解密）；deb 单包签名（dpkg-sig / debsigs，发行版并不使用，签软件源即可）；Alpine 只支持 RSA 签名（apk 本身只认 RSA）
+- 源码包（`.dsc`、`.src.rpm`）
 - 自动分析二进制的动态库依赖
 - 运行维护者脚本（只负责打包，不负责安装）
 

@@ -1,0 +1,204 @@
+name: Release assets
+
+# Builds static Linux binaries (x86_64 and aarch64), packages them with linuxpkg itself
+# (deb, rpm, Arch, Alpine), writes SHA256SUMS (signed when the signing key is available),
+# installs the packages in distribution containers and, for a published release, uploads
+# everything to that release. "Run workflow" does the same without uploading, for a dry run.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, arch: x86_64, deb: amd64 }
+          - { os: ubuntu-24.04-arm, arch: aarch64, deb: arm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Build the static binary
+        run: |
+          moon update
+          # Static linking is only for these builds: macOS cannot link statically, so the
+          # option is not committed to cmd/main/moon.pkg.
+          printf '\noptions(\n  link: { "native": { "cc-link-flags": "-static" } },\n)\n' >> cmd/main/moon.pkg
+          moon build --target native --release cmd/main
+          mkdir -p dist stage
+          cp _build/native/release/build/cmd/main/main.exe stage/linuxpkg
+          chmod +x stage/linuxpkg
+          file stage/linuxpkg
+          if ldd stage/linuxpkg 2>&1 | grep -q "not a dynamic executable"; then echo "static: ok"; else ldd stage/linuxpkg; exit 1; fi
+          VERSION="$(stage/linuxpkg --version | awk '{print $2}')"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          cp LICENSE README.md stage/
+          tar -C stage -czf "dist/linuxpkg-${VERSION}-linux-${{ matrix.arch }}.tar.gz" linuxpkg LICENSE README.md
+
+      - name: Package linuxpkg with linuxpkg
+        env:
+          SIGN_KEY: ${{ secrets.LINUXPKG_SIGNING_KEY }}
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          python3 - "$PWD" "${{ matrix.deb }}" <<'PY'
+          import json, sys
+          root, arch = sys.argv[1:3]
+          config = json.load(open(root + "/examples/self/linuxpkg.json"))
+          config["arch"] = arch
+          for item in config["contents"]:
+              if item["dst"] == "/usr/bin/linuxpkg":
+                  item["src"] = root + "/stage/linuxpkg"
+              else:
+                  item["src"] = root + "/" + item["src"].replace("../../", "")
+          json.dump(config, open(root + "/self.json", "w"), indent=2)
+          PY
+          args=(build self.json --out dist)
+          if [ -n "$SIGN_KEY" ]; then
+            keyfile="$(mktemp)"; trap 'rm -f "$keyfile"' EXIT; chmod 600 "$keyfile"
+            printf '%s\n' "$SIGN_KEY" > "$keyfile"
+            args+=(--sign-key "$keyfile" --apk-key-name linuxpkg.rsa.pub)
+          fi
+          stage/linuxpkg "${args[@]}"
+          ls -l dist
+
+      - name: Upload the files
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.arch }}
+          path: dist/*
+
+  macos:
+    name: build (macOS, optional)
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Build
+        run: |
+          moon update
+          moon build --target native --release cmd/main
+          mkdir -p dist stage
+          cp _build/native/release/build/cmd/main/main.exe stage/linuxpkg
+          VERSION="$(stage/linuxpkg --version | awk '{print $2}')"
+          cp LICENSE README.md stage/
+          tar -C stage -czf "dist/linuxpkg-${VERSION}-macos-arm64.tar.gz" linuxpkg LICENSE README.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-macos
+          path: dist/*
+
+  checksums:
+    name: SHA256SUMS
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the files
+        uses: actions/download-artifact@v5
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+
+      - name: Write SHA256SUMS and sign it
+        env:
+          SIGN_KEY: ${{ secrets.LINUXPKG_SIGNING_KEY }}
+        run: |
+          cd dist
+          rm -f SHA256SUMS SHA256SUMS.asc
+          sha256sum * | sort -k2 > SHA256SUMS
+          cat SHA256SUMS
+          if [ -n "$SIGN_KEY" ]; then
+            export GNUPGHOME="$(mktemp -d)"
+            printf '%s\n' "$SIGN_KEY" | gpg --batch --quiet --import
+            gpg --batch --armor --detach-sign --output SHA256SUMS.asc SHA256SUMS
+            gpg --batch --verify SHA256SUMS.asc SHA256SUMS
+            rm -rf "$GNUPGHOME"
+          else
+            echo "No signing key in this run: SHA256SUMS is not signed."
+          fi
+          ls -l
+
+      - name: Keep the files for the next jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: dist/*
+
+      - name: Attach everything to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/* --repo "${{ github.repository }}" --clobber
+
+  install:
+    name: install in ${{ matrix.image }}
+    needs: checksums
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: "debian:12", kind: deb }
+          - { image: "ubuntu:24.04", kind: deb }
+          - { image: "fedora:41", kind: rpm }
+          - { image: "archlinux:latest", kind: arch }
+          - { image: "alpine:3.20", kind: apk }
+    steps:
+      - name: Check out source (for the example)
+        uses: actions/checkout@v5
+
+      - name: Download the files
+        uses: actions/download-artifact@v5
+        with:
+          name: release-files
+          path: dist
+
+      - name: Install the package and run it
+        run: |
+          case "${{ matrix.kind }}" in
+            deb) pat='linuxpkg_*_amd64.deb'; cmd='dpkg -i' ;;
+            rpm) pat='linuxpkg-*.x86_64.rpm'; cmd='rpm -i' ;;
+            arch) pat='linuxpkg-*-x86_64.pkg.tar.zst'; cmd='pacman -U --noconfirm' ;;
+            apk) pat='linuxpkg-*-r1.apk'; cmd='apk add --allow-untrusted' ;;
+          esac
+          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/examples/hello:/hello:ro" "${{ matrix.image }}" sh -ec "
+            f=\$(ls /dist/$pat | head -n 1)
+            echo installing \$f
+            $cmd \$f
+            linuxpkg --version
+            mkdir -p /tmp/out
+            cd /hello && linuxpkg build linuxpkg.json --out /tmp/out
+            linuxpkg verify /tmp/out/hello_1.0.0-1_all.deb
+          "
+
+  native-aarch64:
+    name: run the aarch64 binary
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: dist-aarch64
+          path: dist
+      - run: |
+          tar -xzf dist/linuxpkg-*-linux-aarch64.tar.gz
+          ./linuxpkg --version
+          file linuxpkg
