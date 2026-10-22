@@ -1,5 +1,7 @@
 # linuxpkg
 
+**中文** · [English](README.en.md) · [网页与签名软件源](https://pxgt.github.io/linuxpkg/)
+
 **English summary.** linuxpkg is a pure-MoonBit toolkit (library + command line) that builds,
 inspects and verifies Linux packages. From one JSON file it produces Debian/Ubuntu/UOS/Kylin
 `.deb` packages without `dpkg-deb` and `.rpm` packages (Fedora, openEuler, Anolis) without `rpmbuild`,
@@ -162,13 +164,13 @@ linuxpkg init --moon .                           # 为当前 MoonBit 项目生�
 
 ## 质量数字
 
-- 测试：254 个，wasm-gc、wasm、js、native 四个后端全部通过。
-- 核心包行覆盖率 **93.3%**（spec 97.0%、tar 97.8%、ar 96.4%、cpio 100%、deb 95.6%、rpm 94.2%、compress 91.9%、repo 86.8%、arch 91.5%、apk 89.4%），CI 强制不低于 80%（`tools/check_core_coverage.py`）。
+- 测试：453 个，wasm-gc、wasm、js、native 四个后端全部通过（含 tar / ar / cpio / rpm 头 / 压缩的随机输入"写出再读回"属性测试、签名的可复现与篡改测试、命令行端到端测试）。
+- 核心包行覆盖率 **92.7%**（spec 97.0%、tar 97.8%、ar 96.4%、cpio 100%、deb 95.6%、rpm 94.2%、compress 93.3%、repo 88.7%、arch 91.5%、apk 89.8%、sign 88.3%），CI 强制不低于 90%（`tools/check_core_coverage.py`）。
 - 恶意输入：tar、ar、cpio、deb、rpm 的每一种截断和每个字节翻转（gzip / xz / zstd / 不压缩各测一遍）都只会得到结果或明确的错误，不会崩溃；
   gzip、xz、zstd 炸弹都被 1 GiB 默认上限截住（xz 和 zstd 在解压前就从块头 / 帧头算出解压后大小）。
 
 文档：[教程（5 分钟发布到四大家族）](docs/tutorial.md)、[签名](docs/signing.md)、[软件源](docs/repository.md)、[GitHub Action](docs/github-action.md)、[配置参考](docs/config.md)、[格式说明与和规范的差异](docs/formats.md)、[如何复现所有验证](docs/verification.md)、
-[贡献指南](CONTRIBUTING.md)、[安全策略](SECURITY.md)。
+[架构](docs/architecture.md)、[性能](docs/performance.md)、[开发日志](docs/devlog.md)、[贡献指南](CONTRIBUTING.md)、[安全策略](SECURITY.md)。
 
 ## 范围与不做的事
 
