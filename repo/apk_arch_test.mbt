@@ -250,9 +250,9 @@ test "arch database: files, desc fields and the file list" {
   assert_true(desc.has_prefix(want_start))
   for
     field in [
-      "%ISIZE%\n", "%MD5SUM%\n", "%SHA256SUM%\n", "%URL%\nhttps://example.org/beta\n\n",
-      "%LICENSE%\nMIT\n\n", "%ARCH%\nx86_64\n\n", "%BUILDDATE%\n1700000000\n\n",
-      "%PACKAGER%\nJane <jane@example.org>\n\n", "%PROVIDES%\nbeta-api=2\n\n", "%DEPENDS%\nalpha>=1.0\n\n",
+      "%ISIZE%\n", "%SHA256SUM%\n", "%URL%\nhttps://example.org/beta\n\n", "%LICENSE%\nMIT\n\n",
+      "%ARCH%\nx86_64\n\n", "%BUILDDATE%\n1700000000\n\n", "%PACKAGER%\nJane <jane@example.org>\n\n",
+      "%PROVIDES%\nbeta-api=2\n\n", "%DEPENDS%\nalpha>=1.0\n\n",
     ] {
     assert_true(desc.contains(field))
   }
