@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Release workflow: the Alpine asset names now contain the architecture (`linuxpkg-<version>-r1.x86_64.apk`,
+  `...aarch64.apk`); before, both builds wrote the same name and one asset of v0.4.0 was damaged. The workflow can be
+  started by hand for an existing tag to replace the assets of that release.
+- The Pages workflow no longer runs for release events (the `github-pages` environment only accepts `main`).
+
 ## [0.4.0] - 2026-10-22
 
 ### Added
