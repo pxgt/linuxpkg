@@ -125,11 +125,19 @@ tools/oracle/make_tar_fixtures.sh    # GNU tar: ustar, pax and gnu formats
 tools/oracle/make_cpio_fixtures.sh   # GNU cpio
 tools/oracle/make_deb_fixtures.sh    # dpkg-deb, gzip, xz and zstd
 tools/oracle/make_rpm_fixtures.sh    # rpmbuild, gzip, xz and zstd
+tools/oracle/make_apk_fixtures.sh    # abuild of Alpine v3.20 (docker, or ALPINE_ROOT=<root> as root)
+tools/oracle/make_arch_fixtures.sh   # makepkg of Arch Linux (docker, or ARCH_ROOT=<root> as root)
 tools/oracle/make_sign_fixtures.sh   # throw-away OpenPGP test keys (testdata/sign/) and gpg's signatures over a fixed text
 tools/oracle/make_compress_fixtures.sh   # xz (several checks, blocks, streams), lzma, zstd (levels, streaming), gzip
+tools/elf/make_samples.sh            # testdata/elf: cross-compiled hello.c and tiny.c, without start files
 ```
 
-Each script rewrites the matching `fixtures_test.mbt` and must be run on Linux with the real tools.
+Each script rewrites the matching `fixtures_test.mbt` and must be run on Linux with the real tools. Every fixture
+holds only files that the script itself writes or that are in `tools/oracle/fixture-src/`: the official tools
+package **our** files, never someone else's program. Genuine distribution packages are only downloaded inside
+the CI containers (above) and thrown away. [testdata/PROVENANCE.md](../testdata/PROVENANCE.md) lists the origin of
+every piece of binary data in the repository; `tools/check_provenance.py` fails the CI when something is
+missing from it, and `reuse lint` checks that every file has its copyright and license.
 
 ## Signatures, repositories and the browser build
 
