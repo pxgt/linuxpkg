@@ -84,6 +84,35 @@ a specification; the fix is in the code and the check that would catch it again 
 * **Sorting strings is not alphabetical.** The directory listing of the glob came out in the wrong order because `Array::sort`
   on `String` compares lengths first (the same trap as in the repository indexes); the converter has its own comparison.
 
+## Licensing of the test data and of what we ship (November 6)
+
+The acceptance review caught what our own reviews had missed: to show that linuxpkg reads packages written by the
+official tools, the apk and Arch tests had stored two real distribution packages, `tree` from Alpine and `which`
+from Arch Linux. Those are GPL programs; storing them is distributing them, and that needs their license, their
+copyright notices and an offer of their source. A test fixture is not exempt.
+
+* The fixtures are now packages that the real `abuild` and `makepkg` write from files we wrote
+  (`tools/oracle/fixture-src/`). Without Docker, the scripts chroot into an Alpine root made with `apk.static` and
+  into the Arch Linux bootstrap image. The abuild package is signed with a key made for the occasion, so the test
+  also checks the signature of the real `abuild-sign`, which the old fixture could not do.
+* Reading genuine distribution packages stays tested, but only in the CI containers, which download them and
+  throw them away.
+* For 0.3.0 to 0.5.0, the corresponding source of both programs (checked against the checksums in the Alpine
+  APKBUILD and the Arch PKGBUILD) is attached to the four releases, and THIRD_PARTY.md names their licenses and
+  copyright holders.
+
+Looking at everything we ship in the same way found more. The Linux programs are statically linked with glibc
+(LGPL-2.1-or-later), and the packages only carried our own LICENSE. Linking against musl instead does not work
+with the current toolchain: its C runtime is compiled against glibc's headers (`__printf_chk`, `__fread_chk`). So
+every tarball and package now carries a generated THIRD_PARTY_NOTICES (which also covers moonxz's BSD-3-Clause
+notice, the NOTICE of MoonBit's core library, simdutf and libgcc), and the exact Ubuntu glibc source package is
+published next to the programs. Launchpad keeps every published version, which `apt-get source` does not: it
+only finds the current one. Even the ELF samples had glibc's start files in them; they are now linked with
+`-nostdlib`.
+
+So that this does not happen again, `reuse lint` and `tools/check_provenance.py` run in the CI: a binary blob
+whose origin is not written down now fails the build.
+
 ## Where the time went
 
 Most of the work was the loop "write it, give it to the official tool, read the complaint". That loop is now a script

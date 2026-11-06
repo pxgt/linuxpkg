@@ -89,3 +89,12 @@ building blocks from `justinwongcn/moonpgp`; compression from `moonbit-community
 and `aurora0x27/lzma-mbt`. See [THIRD_PARTY.md](THIRD_PARTY.md). Apache-2.0, see [LICENSE](LICENSE).
 
 The pull request to `justinwongcn/moonpgp` ([#2](https://github.com/justinwongcn/moonpgp/pull/2): support for flate 0.9.0 and a signature time that can be given, so that signatures are reproducible) was merged upstream on 2026-10-22.
+
+**Licensing of what is in the repository and of what we ship.**
+
+- The copyright and license of every file is in [REUSE.toml](REUSE.toml) and checked with `reuse lint`.
+- [testdata/PROVENANCE.md](testdata/PROVENANCE.md) lists where every piece of binary test data comes from, and `tools/check_provenance.py` fails the CI when something is not listed.
+- The test packages are written by the official tools (dpkg-deb, rpmbuild, abuild, makepkg …) from our own files; no third-party program is stored.
+- Every tarball and package we publish carries `THIRD_PARTY_NOTICES`, with the notices and license texts of what is compiled in.
+- The Linux programs are statically linked with glibc (LGPL-2.1-or-later). The source of that exact glibc is published next to them: as release assets, and under [/sources/](https://pxgt.github.io/linuxpkg/sources/).
+- Versions 0.3.0 to 0.5.0 stored two GPL programs as test fixtures (`tree` from Alpine, `which` from Arch Linux). They are gone from 0.5.1 on; their licenses, copyright holders and corresponding source are described in [THIRD_PARTY.md](THIRD_PARTY.md#third-party-programs-in-the-test-data-of-versions-030-to-050).

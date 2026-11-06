@@ -219,6 +219,16 @@ tools/oracle/run.sh                        # 需要 dpkg-deb、dpkg、sudo（可
 目录：`spec/`（包模型、配置、校验）、`archive/tar|ar|cpio/`（归档格式）、`compress/`（gzip / xz / zstd 压缩与有界解压）、
 `deb/`、`rpm/`、`arch/`、`apk/`（构建、读取、校验）、`repo/`（apt / dnf 软件源索引）、`cmd/main/`（命令行）、`examples/`（示例）、`tools/oracle/`（官方工具验证脚本）。
 
-## 许可证
+## 许可证与第三方材料
 
-Apache-2.0，见 [LICENSE](LICENSE)。
+linuxpkg 本身是 Apache-2.0，见 [LICENSE](LICENSE)。
+
+- **每个文件的版权和许可证**写在 [REUSE.toml](REUSE.toml) 里，CI 用 `reuse lint` 检查（[REUSE 规范](https://reuse.software)）。
+- **每一份测试数据的来源**列在 [testdata/PROVENANCE.md](testdata/PROVENANCE.md)，CI 里的 `tools/check_provenance.py` 发现未登记的二进制数据就会失败。
+  - 测试用的安装包都是官方工具（dpkg-deb、rpmbuild、abuild、makepkg 等）用**我们自己写的文件**打出来的，仓库里不存任何别人的程序。
+  - 真实发行版的包只在 CI 容器里临时下载来检查，用完即删。
+- **编进或链接进程序的第三方代码**，以及它们的许可证，见 [THIRD_PARTY.md](THIRD_PARTY.md)。
+- **我们发布的每个程序包和安装包**都附有 `THIRD_PARTY_NOTICES`：
+  - 里面是各依赖的版权声明、NOTICE 文件和许可证全文；
+  - Linux 程序静态链接了 glibc（LGPL-2.1-or-later），对应版本的 glibc 源码和我们的程序放在同一个地方（Release 附件，以及 [软件源站点的 /sources/](https://pxgt.github.io/linuxpkg/sources/)）。
+- **0.3.0–0.5.0 的测试数据里含有两个 GPL 程序**（Alpine 的 `tree`、Arch 的 `which`）。0.5.1 起已删除；它们的许可证、版权人和对应源码见 [THIRD_PARTY.md](THIRD_PARTY.md#third-party-programs-in-the-test-data-of-versions-030-to-050)。
