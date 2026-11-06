@@ -4,6 +4,9 @@ name: Pages
 # to JavaScript) and signed package repositories (apt, dnf, pacman, apk) with linuxpkg itself and
 # moonthrift, all built here by linuxpkg. Build outputs are never committed; the signing key comes
 # from the LINUXPKG_SIGNING_KEY secret and is only written to a temporary file.
+# The packaged programs are statically linked with glibc: each package installs its
+# THIRD_PARTY_NOTICES, and the source of that glibc is published under /sources/. The page itself
+# links THIRD_PARTY_NOTICES.txt for the JavaScript build.
 on:
   push:
     branches: [main]
@@ -26,7 +29,7 @@ jobs:
       matrix:
         include:
           - { os: ubuntu-22.04, arch: x86_64, deb: amd64 }
-          - { os: ubuntu-24.04-arm, arch: aarch64, deb: arm64 }
+          - { os: ubuntu-22.04-arm, arch: aarch64, deb: arm64 }
     runs-on: ${{ matrix.os }}
     steps:
       - name: Check out source
@@ -37,15 +40,18 @@ jobs:
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
 
-      - name: Build the static linuxpkg
+      - name: Build the static linuxpkg, its notices and the glibc source
         run: |
           moon update
           printf '\noptions(\n  link: { "native": { "cc-link-flags": "-static" } },\n)\n' >> cmd/main/moon.pkg
           moon build --target native --release cmd/main
-          mkdir -p stage out
+          mkdir -p stage out sources
           cp _build/native/release/build/cmd/main/main.exe stage/linuxpkg
           chmod +x stage/linuxpkg
           stage/linuxpkg --version
+          VERSION="$(stage/linuxpkg --version | awk '{print $2}')"
+          tools/notices/prepare_dist.sh linuxpkg "$VERSION" . "$GITHUB_SHA" sources stage/THIRD_PARTY_NOTICES \
+            "https://pxgt.github.io/linuxpkg/sources/"
 
       - name: Package linuxpkg with linuxpkg, signed
         env:
@@ -66,6 +72,7 @@ jobs:
                   item["src"] = root + "/stage/linuxpkg"
               else:
                   item["src"] = root + "/" + item["src"].replace("../../", "")
+          config["contents"].append({"src": root + "/stage/THIRD_PARTY_NOTICES", "dst": "/usr/share/doc/linuxpkg/THIRD_PARTY_NOTICES"})
           json.dump(config, open(root + "/self.json", "w"), indent=2)
           PY
           stage/linuxpkg build self.json --out out --sign-key "$keyfile" --apk-key-name linuxpkg.rsa.pub
@@ -87,6 +94,15 @@ jobs:
           moon build --target native --release
           ../stage/linuxpkg init --moon . --arch "${{ matrix.deb }}"
           sed -i 's|"maintainer": ".*"|"maintainer": "pxgt <133531533+pxgt@users.noreply.github.com>"|' linuxpkg.json
+          version="$(python3 -c 'import json; print(json.load(open("linuxpkg.json"))["version"])')"
+          ../tools/notices/prepare_dist.sh moonthrift "$version" . "$tag" ../sources THIRD_PARTY_NOTICES \
+            "https://pxgt.github.io/linuxpkg/sources/"
+          python3 - <<'PY'
+          import json
+          config = json.load(open("linuxpkg.json"))
+          config["contents"].append({"src": "THIRD_PARTY_NOTICES", "dst": "/usr/share/doc/moonthrift/THIRD_PARTY_NOTICES"})
+          json.dump(config, open("linuxpkg.json", "w"), indent=2)
+          PY
           keyfile="$RUNNER_TEMP/signing2.key"
           umask 077
           printf '%s\n' "$SIGN_KEY" > "$keyfile"
@@ -95,12 +111,16 @@ jobs:
           rm -f "$keyfile"
           ls -l ../out
 
+      - name: Every package carries its notices
+        run: python3 tools/notices/check_dist.py stage/linuxpkg out sources
+
       - name: Keep the packages
         uses: actions/upload-artifact@v4
         with:
           name: packages-${{ matrix.arch }}
           path: |
             out/*
+            sources/*
             stage/linuxpkg
 
   site:
@@ -116,13 +136,15 @@ jobs:
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
 
-      - name: Build the browser library
+      - name: Build the browser library and its notices
         run: |
           moon update
           moon build --target js --release web
           mkdir -p public
           cp site/index.html site/style.css site/app.js site/linuxpkg.asc site/linuxpkg.rsa.pub public/
-          cp _build/js/release/build/web/web.js public/linuxpkg-web.js
+          VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' moon.mod)"
+          python3 tools/notices/make_notices.py --project linuxpkg --version "$VERSION" --module-root . --kind js -o public/THIRD_PARTY_NOTICES.txt
+          { printf '/*! linuxpkg %s, Apache-2.0. Third-party notices: THIRD_PARTY_NOTICES.txt */\n' "$VERSION"; cat _build/js/release/build/web/web.js; } > public/linuxpkg-web.js
 
       - name: Download the packages
         uses: actions/download-artifact@v5
@@ -144,6 +166,20 @@ jobs:
           export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
           tools/assemble_site.sh "$PWD/downloaded/packages-x86_64/stage/linuxpkg" "$PWD/pkgs" "$PWD/public" "$keyfile"
           rm -f "$keyfile"
+
+      - name: Publish the glibc source next to the packages
+        run: |
+          mkdir -p public/sources
+          cp downloaded/packages-*/sources/* public/sources/
+          {
+            echo '<!doctype html><meta charset="utf-8"><title>linuxpkg: corresponding source</title>'
+            echo '<p>The programs in these package repositories are statically linked with the GNU C Library'
+            echo '(LGPL-2.1-or-later). This is the Ubuntu source package of the exact version linked in. See'
+            echo 'THIRD_PARTY_NOTICES in each package, and <a href="../THIRD_PARTY_NOTICES.txt">the notices of this page</a>.</p><ul>'
+            for f in public/sources/glibc_*; do n="$(basename "$f")"; echo "<li><a href=\"$n\">$n</a></li>"; done
+            echo '</ul>'
+          } > public/sources/index.html
+          ls -l public/sources
 
       - name: Upload the site
         uses: actions/upload-pages-artifact@v4

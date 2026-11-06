@@ -5,6 +5,11 @@ name: Release assets
 # installs the packages in distribution containers and, for a published release, uploads
 # everything to that release. "Run workflow" does the same without uploading, for a dry run;
 # with a tag name (for example v0.4.0) it builds that tag again and replaces the assets of its release.
+#
+# The Linux programs are statically linked with glibc (LGPL-2.1-or-later), so every tarball and
+# package carries THIRD_PARTY_NOTICES (tools/notices/make_notices.py) and the source package of the
+# exact glibc that was linked in is uploaded next to them (tools/notices/prepare_dist.sh). Both
+# architectures are built on Ubuntu 22.04, so one glibc version is involved.
 on:
   release:
     types: [published]
@@ -26,7 +31,7 @@ jobs:
       matrix:
         include:
           - { os: ubuntu-22.04, arch: x86_64, deb: amd64 }
-          - { os: ubuntu-24.04-arm, arch: aarch64, deb: arm64 }
+          - { os: ubuntu-22.04-arm, arch: aarch64, deb: arm64 }
     runs-on: ${{ matrix.os }}
     steps:
       - name: Check out source
@@ -39,7 +44,7 @@ jobs:
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
 
-      - name: Build the static binary
+      - name: Build the static binary, its notices and the glibc source
         run: |
           moon update
           # Static linking is only for these builds: macOS cannot link statically, so the
@@ -53,8 +58,10 @@ jobs:
           if ldd stage/linuxpkg 2>&1 | grep -q "not a dynamic executable"; then echo "static: ok"; else ldd stage/linuxpkg; exit 1; fi
           VERSION="$(stage/linuxpkg --version | awk '{print $2}')"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          tools/notices/prepare_dist.sh linuxpkg "$VERSION" . "v$VERSION" dist stage/THIRD_PARTY_NOTICES \
+            "the GitHub release v$VERSION of linuxpkg (https://github.com/pxgt/linuxpkg/releases/tag/v$VERSION)"
           cp LICENSE README.md stage/
-          tar -C stage -czf "dist/linuxpkg-${VERSION}-linux-${{ matrix.arch }}.tar.gz" linuxpkg LICENSE README.md
+          tar -C stage -czf "dist/linuxpkg-${VERSION}-linux-${{ matrix.arch }}.tar.gz" linuxpkg LICENSE README.md THIRD_PARTY_NOTICES
 
       - name: Package linuxpkg with linuxpkg
         env:
@@ -71,6 +78,7 @@ jobs:
                   item["src"] = root + "/stage/linuxpkg"
               else:
                   item["src"] = root + "/" + item["src"].replace("../../", "")
+          config["contents"].append({"src": root + "/stage/THIRD_PARTY_NOTICES", "dst": "/usr/share/doc/linuxpkg/THIRD_PARTY_NOTICES"})
           json.dump(config, open(root + "/self.json", "w"), indent=2)
           PY
           args=(build self.json --out dist)
@@ -83,6 +91,7 @@ jobs:
           # The Alpine file name has no architecture; both builds would write the same asset name.
           for f in dist/*-r1.apk; do mv "$f" "${f%.apk}.${{ matrix.arch }}.apk"; done
           ls -l dist
+          python3 tools/notices/check_dist.py stage/linuxpkg dist dist
 
       - name: Upload the files
         uses: actions/upload-artifact@v4
@@ -110,8 +119,10 @@ jobs:
           mkdir -p dist stage
           cp _build/native/release/build/cmd/main/main.exe stage/linuxpkg
           VERSION="$(stage/linuxpkg --version | awk '{print $2}')"
+          # Dynamically linked with the macOS system libraries: only the MoonBit parts need notices.
+          python3 tools/notices/make_notices.py --project linuxpkg --version "$VERSION" --module-root . --kind native -o stage/THIRD_PARTY_NOTICES
           cp LICENSE README.md stage/
-          tar -C stage -czf "dist/linuxpkg-${VERSION}-macos-arm64.tar.gz" linuxpkg LICENSE README.md
+          tar -C stage -czf "dist/linuxpkg-${VERSION}-macos-arm64.tar.gz" linuxpkg LICENSE README.md THIRD_PARTY_NOTICES
       - uses: actions/upload-artifact@v4
         with:
           name: dist-macos
@@ -209,7 +220,7 @@ jobs:
   native-aarch64:
     name: run the aarch64 binary
     needs: build
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-22.04-arm
     steps:
       - uses: actions/download-artifact@v5
         with:
