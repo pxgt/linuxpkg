@@ -1,0 +1,17 @@
+# Copyright and license of every file, in the format of the REUSE specification
+# (https://reuse.software). `reuse lint` checks it in the CI. Where the test data comes from is
+# described in testdata/PROVENANCE.md, and what third-party code is linked into the programs in
+# THIRD_PARTY.md.
+version = 1
+
+[[annotations]]
+path = "**"
+SPDX-FileCopyrightText = "2026 pxgt and the linuxpkg contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+# Copied unchanged from goreleaser/nfpm v2.48.0 (testdata/nfpm/README.md).
+[[annotations]]
+path = "testdata/nfpm/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2018 GoReleaser"
+SPDX-License-Identifier = "MIT"

@@ -65,23 +65,26 @@ fn sample_spec() -> @spec.PackageSpec raise {
 
 ///|
 test "a package written by the real makepkg is read and verified" {
-  let data = decode_hex(real_which_package)
+  let data = decode_hex(real_makepkg_package)
   let pkg = @arch.read(data)
   assert_eq(pkg.compression, "zstd")
-  assert_eq(pkg.field("pkgname"), Some("which"))
-  assert_eq(pkg.field("arch"), Some("x86_64"))
+  assert_eq(pkg.field("pkgname"), Some("linuxpkg-fixture"))
+  assert_eq(pkg.field("arch"), Some("any"))
   assert_eq(pkg.field("xdata"), Some("pkgtype=pkg"))
-  assert_eq(pkg.fields("depend"), ["bash", "glibc"])
+  assert_eq(pkg.field("builddate"), Some("1700000000"))
+  assert_eq(pkg.fields("depend"), ["bash", "coreutils"])
+  assert_eq(pkg.fields("backup"), ["etc/linuxpkg-fixture.conf"])
   assert_eq(pkg.verify(), [])
-  assert_eq(pkg.checked_files(), 5)
+  // .BUILDINFO, .INSTALL, .PKGINFO and the three files; the link has no digest.
+  assert_eq(pkg.checked_files(), 6)
   let report = pkg.to_json()
   guard report is Object(map) else { fail("object expected") }
   assert_eq(map["format"], Json::string("arch"))
-  assert_eq(map["name"], Json::string("which"))
-  assert_eq(map["architecture"], Json::string("x86_64"))
+  assert_eq(map["name"], Json::string("linuxpkg-fixture"))
+  assert_eq(map["architecture"], Json::string("any"))
   assert_eq(
     map["depends"],
-    Json::array([Json::string("bash"), Json::string("glibc")]),
+    Json::array([Json::string("bash"), Json::string("coreutils")]),
   )
   guard map["files"] is Array(files) else { fail("files expected") }
   let paths = files.map(f => {
@@ -94,14 +97,17 @@ test "a package written by the real makepkg is read and verified" {
       _ => ""
     }
   })
-  assert_eq(paths[0], "/usr")
-  assert_true(paths.contains("/usr/bin/which"))
+  assert_eq(paths[0], "/etc")
+  assert_true(paths.contains("/usr/bin/linuxpkg-fixture"))
+  assert_true(paths.contains("/usr/bin/lpf"))
+  assert_true(paths.contains("/var/lib/linuxpkg-fixture"))
   assert_true(!paths.contains("/.PKGINFO"))
-  // The mtree of the real package lists the dot files, files and links.
+  // The mtree written by makepkg lists the dot files, files, links and directories.
   match pkg.mtree {
     Some(entries) => {
       assert_eq(entries[0].path, ".BUILDINFO")
       assert_true(entries.any(e => e.path == "usr/bin" && e.kind == "dir"))
+      assert_true(entries.any(e => e.path == "usr/bin/lpf" && e.kind == "link"))
     }
     None => fail("the package has an .MTREE")
   }
@@ -109,13 +115,13 @@ test "a package written by the real makepkg is read and verified" {
 
 ///|
 test "a damaged real package is detected" {
-  let data = decode_hex(real_which_package)
+  let data = decode_hex(real_makepkg_package)
   // Unpack, change one byte of a file, pack again.
   let tar = @compress.decompress(data, Zstd)
   let entries = @tar.parse(tar)
   let changed = entries.map(e => {
     match e.kind {
-      File(content) if e.path == "usr/bin/which" => {
+      File(content) if e.path == "usr/bin/linuxpkg-fixture" => {
         let copy = content.to_fixedarray()
         copy[100] = (copy[100].to_int() ^ 1).to_byte()
         { ..e, kind: File(Bytes::from_array(copy[:])), }
@@ -126,7 +132,9 @@ test "a damaged real package is detected" {
   let damaged = @compress.compress(@tar.build(changed), Zstd)
   let problems = @arch.read(damaged).verify()
   assert_eq(problems.length(), 1)
-  assert_true(problems[0].has_prefix("usr/bin/which: sha256 mismatch"))
+  assert_true(
+    problems[0].has_prefix("usr/bin/linuxpkg-fixture: sha256 mismatch"),
+  )
 }
 
 ///|

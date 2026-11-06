@@ -5,10 +5,11 @@
 ///   a number that does not fit its field).
 /// - `Corrupt` means the archive is malformed; `offset` is the byte position
 ///   of the offending member header.
+#derive(Eq, Debug)
 pub(all) suberror ArError {
   Invalid(field~ : String, message~ : String)
   Corrupt(offset~ : Int32, message~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for ArError with fn output(self, logger) {

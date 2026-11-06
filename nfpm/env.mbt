@@ -1,9 +1,10 @@
 ///|
 /// Why an nFPM configuration could not be converted. The text names the
 /// field (`contents[2].src`) and says what is wrong or not supported.
+#derive(Eq, Debug)
 pub(all) suberror NfpmError {
   Invalid(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for NfpmError with fn output(self, logger) {

@@ -36,7 +36,10 @@ On Linux or WSL also run `tools/oracle/run.sh` (see `docs/verification.md`).
 ## Changing a format
 
 Verify with the real tool first (dpkg, rpm, GNU tar/cpio) and record any difference from the specification in
-`docs/formats.md`. Add the official tool's output as a fixture when practical.
+`docs/formats.md`. Add the official tool's output as a fixture when practical, made from files you write
+yourself: never commit a package, program or other file of a third party as test data. Genuine distribution
+packages may be downloaded by the CI at run time, but not stored. Add every new piece of binary data to
+`testdata/PROVENANCE.md` (`tools/check_provenance.py` checks it) and keep `reuse lint` passing.
 
 ## License
 

@@ -1,5 +1,6 @@
 ///|
 /// What a `contents` item of the configuration describes.
+#derive(Eq, Debug)
 pub(all) enum ContentKind {
   /// A regular file read from `src`.
   File
@@ -9,12 +10,13 @@ pub(all) enum ContentKind {
   Dir
   /// A symbolic link at `dst` pointing to `src`.
   Symlink
-} derive(Eq, Debug)
+}
 
 ///|
 /// One item of `contents`. `src` is a file to read for files, and the link
 /// target for symbolic links. Unset `mode`, `owner`, `group` and `mtime` take
 /// the defaults of their kind.
+#derive(Eq, Debug)
 pub(all) struct Content {
   src : String?
   dst : String
@@ -23,29 +25,32 @@ pub(all) struct Content {
   owner : String?
   group : String?
   mtime : Int64?
-} derive(Eq, Debug)
+}
 
 ///|
 /// Script files named by the configuration.
+#derive(Eq, Debug)
 pub(all) struct ScriptPaths {
   pre_install : String?
   post_install : String?
   pre_remove : String?
   post_remove : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// Options that apply to one output format (`"deb"` or `"rpm"` in the
 /// configuration).
+#derive(Eq, Debug)
 pub(all) struct FormatOptions {
   /// Overrides the package-wide `compression` for this format.
   compression : @compress.Compression?
-} derive(Eq, Debug)
+}
 
 ///|
 /// A parsed `linuxpkg.json`. It still refers to files by name; call
 /// `Config::sources` to learn which ones to read and `Config::resolve` to turn
 /// it into a `PackageSpec` once they are available.
+#derive(Eq, Debug)
 pub(all) struct Config {
   name : String
   version : String
@@ -84,7 +89,7 @@ pub(all) struct Config {
   /// Do not stop when an ELF file in `contents` is built for another CPU than
   /// `arch` (cross toolchains, firmware); `build --allow-arch-mismatch` sets it too.
   allow_arch_mismatch : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// The compression to use for the deb: the `deb` setting, else the

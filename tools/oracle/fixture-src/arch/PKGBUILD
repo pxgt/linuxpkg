@@ -1,0 +1,26 @@
+# Test fixture of linuxpkg, built by the real makepkg (tools/oracle/make_arch_fixtures.sh).
+# Every packaged file is in tools/oracle/fixture-src/common and was written for linuxpkg
+# (Apache-2.0); nothing third-party is packaged.
+pkgname=linuxpkg-fixture
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Test fixture of linuxpkg, built by makepkg'
+arch=('any')
+url='https://github.com/pxgt/linuxpkg'
+license=('Apache-2.0')
+depends=('bash' 'coreutils')
+backup=('etc/linuxpkg-fixture.conf')
+install=linuxpkg-fixture.install
+options=('!strip' '!debug')
+source=('linuxpkg-fixture.sh' 'linuxpkg-fixture.conf' 'README')
+sha256sums=('3b095a92e706e29a95996e268fcd971070219f297c9d591862715b3db2e3e1d4'
+            '7b1db8f6b950b5de2b2268e8bd2a77fd4b7732226dade48d9e23987cc0119b27'
+            '16061b5e563e1b8058751b633acc101d09011fd38df5a907e108b3512ee9302d')
+
+package() {
+  install -Dm755 linuxpkg-fixture.sh "$pkgdir/usr/bin/linuxpkg-fixture"
+  ln -s linuxpkg-fixture "$pkgdir/usr/bin/lpf"
+  install -Dm644 linuxpkg-fixture.conf "$pkgdir/etc/linuxpkg-fixture.conf"
+  install -Dm644 README "$pkgdir/usr/share/doc/linuxpkg-fixture/README"
+  install -dm750 "$pkgdir/var/lib/linuxpkg-fixture"
+}

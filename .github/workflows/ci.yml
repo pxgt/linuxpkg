@@ -73,6 +73,15 @@ jobs:
       - name: Enforce the core line-coverage floor
         run: python3 tools/check_core_coverage.py --minimum 90
 
+      - name: Licensing (REUSE), the origin of every piece of test data, third-party notices
+        run: |
+          pipx install "reuse>=5"
+          reuse lint
+          python3 tools/check_provenance.py
+          python3 tools/notices/make_notices.py --project linuxpkg --version "$(sed -n 's/^version = "\(.*\)"/\1/p' moon.mod)" \
+            --module-root . --kind js -o "$RUNNER_TEMP/THIRD_PARTY_NOTICES.txt"
+          grep -q "BSD-3-Clause-ulikunitz-xz.txt" "$RUNNER_TEMP/THIRD_PARTY_NOTICES.txt"
+
       - name: Verify package artifact
         run: moon package --frozen
 

@@ -3,6 +3,7 @@
 ///
 /// `mtime` is in seconds since the Unix epoch and `mode` holds the file mode
 /// including the file type bits (`0o100644` for a regular file).
+#derive(Eq, Debug)
 pub(all) struct Member {
   name : String
   data : Bytes
@@ -10,7 +11,7 @@ pub(all) struct Member {
   uid : Int32
   gid : Int32
   mode : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// A regular file member. Defaults to modification time 0, owner 0:0 and

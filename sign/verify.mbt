@@ -17,6 +17,7 @@ pub struct PublicKeyring {
 
 ///|
 /// Who made a signature that checked out.
+#derive(Eq, Debug)
 pub(all) struct Verified {
   /// The 40 hexadecimal digits of the signing key's fingerprint, in capitals.
   fingerprint : String
@@ -24,7 +25,7 @@ pub(all) struct Verified {
   key_id : String
   /// The signature time, in seconds since 1970.
   created : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 fn usable(packet : @packet.PublicKeyPacket) -> Bool {
@@ -363,12 +364,13 @@ pub fn PublicKeyring::verify_cleartext(
 
 ///|
 /// What a signature says about itself, without checking it.
+#derive(Eq, Debug)
 pub(all) struct SignatureInfo {
   /// The 16 hexadecimal digits of the signing key's id, in capitals.
   key_id : String
   /// The signature time, in seconds since 1970.
   created : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 /// Read who signed and when from the first signature in `signature` (binary
@@ -575,9 +577,10 @@ pub fn PublicKeyring::verify_rsa(
 /// - `Good`: the signature checks out against a key of the keyring.
 /// - `Bad`: the signature is damaged, does not match the main header, or was
 ///   made by a key that is not in the keyring; the text says which.
+#derive(Eq, Debug)
 pub(all) enum SignatureStatus {
   Unsigned
   Signed(key_id~ : String)
   Good(Verified)
   Bad(String)
-} derive(Eq, Debug)
+}

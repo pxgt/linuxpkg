@@ -7,6 +7,7 @@ import {
   "Xpeng/linuxpkg/sign",
   "Xpeng/linuxpkg/spec",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -19,18 +20,20 @@ pub fn read(BytesView) -> RpmPackage raise RpmError
 pub fn sign(BytesView, @sign.SigningKey, created~ : Int64) -> Bytes raise RpmError
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror RpmError {
   Invalid(field~ : String, message~ : String)
   Corrupt(offset~ : Int32, message~ : String)
   Unsupported(message~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub impl Show for RpmError
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct Header {
   region : Int32?
   tags : Array[Tag]
-} derive(Eq, @debug.Debug)
+}
 pub fn Header::decode(BytesView, Int32) -> (Self, Int32) raise RpmError
 pub fn Header::encode(Self) -> Bytes raise RpmError
 pub fn Header::get(Self, Int32) -> Value?
@@ -38,6 +41,7 @@ pub fn Header::ints(Self, Int32) -> Array[Int32]
 pub fn Header::string(Self, Int32) -> String?
 pub fn Header::strings(Self, Int32) -> Array[String]
 
+#derive(Eq, @debug.Debug)
 pub(all) struct RpmFile {
   path : String
   mode : Int32
@@ -48,27 +52,30 @@ pub(all) struct RpmFile {
   owner : String
   group : String
   flags : Int32
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) struct RpmPackage {
   lead_name : String
   signature : Header
   header : Header
   header_bytes : Bytes
   payload : Bytes
-} derive(Eq, @debug.Debug)
+}
 pub fn RpmPackage::compressor(Self) -> String
 pub fn RpmPackage::files(Self) -> Array[RpmFile] raise RpmError
 pub fn RpmPackage::payload_entries(Self, max_unpacked? : Int32) -> Array[@cpio.Entry] raise RpmError
 pub fn RpmPackage::signature_status(Self, @sign.PublicKeyring?) -> @sign.SignatureStatus
-pub fn RpmPackage::to_json(Self) -> Json raise RpmError
+pub fn RpmPackage::to_json(Self) -> @json.Json raise RpmError
 pub fn RpmPackage::verify(Self) -> Array[String] raise RpmError
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Tag {
   id : Int32
   value : Value
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Value {
   Int8(Array[Int32])
   Int16(Array[Int32])
@@ -78,7 +85,7 @@ pub(all) enum Value {
   Bin(Bytes)
   StrArray(Array[String])
   I18n(Array[String])
-} derive(Eq, @debug.Debug)
+}
 
 // Type aliases
 

@@ -6,11 +6,12 @@
 /// - `Corrupt`: a file that should be a package is malformed.
 /// - `Unsupported`: the package is valid but uses something this package
 ///   does not implement, such as bzip2 compression.
+#derive(Eq, Debug)
 pub(all) suberror ArchError {
   Invalid(field~ : String, message~ : String)
   Corrupt(message~ : String)
   Unsupported(message~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for ArchError with fn output(self, logger) {

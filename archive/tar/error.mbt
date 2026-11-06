@@ -7,11 +7,12 @@
 ///   the offending header or record.
 /// - `Unsupported` means the archive is valid but uses a feature this package
 ///   does not implement.
+#derive(Eq, Debug)
 pub(all) suberror TarError {
   Invalid(field~ : String, message~ : String)
   Corrupt(offset~ : Int32, message~ : String)
   Unsupported(message~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for TarError with fn output(self, logger) {

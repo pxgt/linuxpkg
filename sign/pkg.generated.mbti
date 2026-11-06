@@ -9,12 +9,13 @@ import {
 pub fn signature_info(Bytes) -> SignatureInfo raise SignError
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror SignError {
   Key(message~ : String)
   Locked
   Invalid(message~ : String)
   BadSignature(message~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub impl Show for SignError
 
 // Types and methods
@@ -29,22 +30,25 @@ pub fn PublicKeyring::verify_cleartext(Self, String) -> (String, Verified) raise
 pub fn PublicKeyring::verify_detached(Self, BytesView, Bytes) -> Verified raise SignError
 pub fn PublicKeyring::verify_rsa(Self, RsaHash, BytesView, BytesView) -> String raise SignError
 
+#derive(Eq, @debug.Debug)
 pub(all) enum RsaHash {
   Sha1
   Sha256
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) struct SignatureInfo {
   key_id : String
   created : Int64
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) enum SignatureStatus {
   Unsigned
   Signed(key_id~ : String)
   Good(Verified)
   Bad(String)
-} derive(Eq, @debug.Debug)
+}
 
 pub struct SigningKey {
   // private fields
@@ -63,11 +67,12 @@ pub fn SigningKey::rsa_public_pem(Self) -> String raise SignError
 pub fn SigningKey::rsa_sign(Self, RsaHash, BytesView) -> Bytes raise SignError
 pub fn SigningKey::signing_time(Self, Int64) -> Int64
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Verified {
   fingerprint : String
   key_id : String
   created : Int64
-} derive(Eq, @debug.Debug)
+}
 
 // Type aliases
 

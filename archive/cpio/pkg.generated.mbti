@@ -11,13 +11,15 @@ pub fn build(Array[Entry]) -> Bytes raise CpioError
 pub fn parse(BytesView, max_entries? : Int32) -> Array[Entry] raise CpioError
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror CpioError {
   Invalid(field~ : String, message~ : String)
   Corrupt(offset~ : Int32, message~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub impl Show for CpioError
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct Entry {
   path : String
   data : Bytes
@@ -31,7 +33,7 @@ pub(all) struct Entry {
   dev_minor : Int32
   rdev_major : Int32
   rdev_minor : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn Entry::dir(String, mode? : Int32, uid? : Int32, gid? : Int32, mtime? : Int64, ino? : Int32) -> Self
 pub fn Entry::file(String, Bytes, mode? : Int32, uid? : Int32, gid? : Int32, mtime? : Int64, ino? : Int32) -> Self
 pub fn Entry::symlink(String, String, uid? : Int32, gid? : Int32, mtime? : Int64, ino? : Int32) -> Self

@@ -6,6 +6,7 @@ import {
   "Xpeng/linuxpkg/compress",
   "Xpeng/linuxpkg/spec",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -26,14 +27,16 @@ pub fn read(BytesView, max_unpacked? : Int32) -> DebPackage raise DebError
 pub fn version_string(@spec.PackageSpec) -> String
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror DebError {
   Invalid(field~ : String, message~ : String)
   Corrupt(message~ : String)
   Unsupported(message~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub impl Show for DebError
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct DebPackage {
   format_version : String
   fields : Array[(String, String)]
@@ -43,9 +46,9 @@ pub(all) struct DebPackage {
   conffiles : Array[String]
   control_compression : String
   data_compression : String
-} derive(Eq, @debug.Debug)
+}
 pub fn DebPackage::field(Self, String) -> String?
-pub fn DebPackage::to_json(Self) -> Json
+pub fn DebPackage::to_json(Self) -> @json.Json
 pub fn DebPackage::verify(Self) -> Array[String]
 
 // Type aliases

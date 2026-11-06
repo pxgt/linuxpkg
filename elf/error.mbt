@@ -5,11 +5,12 @@
 /// - `Truncated`: the file ends before a part the header points to; the text
 ///   names that part.
 /// - `Invalid`: a field has a value that cannot be right (or is unsupported).
+#derive(Eq, Debug)
 pub(all) suberror ElfError {
   NotElf
   Truncated(String)
   Invalid(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for ElfError with fn output(self, logger) {

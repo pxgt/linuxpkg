@@ -1,5 +1,6 @@
 ///|
 /// The value of one header tag, by RPM data type.
+#derive(Eq, Debug)
 pub(all) enum Value {
   /// `RPM_INT8_TYPE` (2) and `RPM_CHAR_TYPE` (1).
   Int8(Array[Int32])
@@ -17,23 +18,25 @@ pub(all) enum Value {
   StrArray(Array[String])
   /// `RPM_I18NSTRING_TYPE` (9), a string array indexed by locale.
   I18n(Array[String])
-} derive(Eq, Debug)
+}
 
 ///|
 /// One header entry: a numeric tag and its value.
+#derive(Eq, Debug)
 pub(all) struct Tag {
   id : Int32
   value : Value
-} derive(Eq, Debug)
+}
 
 ///|
 /// A decoded or to-be-encoded rpm header (the signature header or the main
 /// header). `region` is the tag number of the immutable region (62 for the
 /// signature header, 63 for the main header) when the header has one.
+#derive(Eq, Debug)
 pub(all) struct Header {
   region : Int32?
   tags : Array[Tag]
-} derive(Eq, Debug)
+}
 
 ///|
 const MAGIC : Bytes = b"\x8e\xad\xe8\x01\x00\x00\x00\x00"

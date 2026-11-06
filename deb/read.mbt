@@ -1,5 +1,6 @@
 ///|
 /// A deb opened for inspection: its control data and its file tree.
+#derive(Eq, Debug)
 pub(all) struct DebPackage {
   /// Contents of `debian-binary`, for example `2.0`.
   format_version : String
@@ -16,7 +17,7 @@ pub(all) struct DebPackage {
   /// `none`, `gzip`, `xz`, `zstd` or `lzma`.
   control_compression : String
   data_compression : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// How a part is compressed, judging by the extension after `.tar`.

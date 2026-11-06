@@ -9,12 +9,13 @@
 /// - `Invalid`: a signature, a cleartext message or an argument is malformed.
 /// - `BadSignature`: the signature is well formed but does not match the data
 ///   or no key of the keyring made it.
+#derive(Eq, Debug)
 pub(all) suberror SignError {
   Key(message~ : String)
   Locked
   Invalid(message~ : String)
   BadSignature(message~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for SignError with fn output(self, logger) {
