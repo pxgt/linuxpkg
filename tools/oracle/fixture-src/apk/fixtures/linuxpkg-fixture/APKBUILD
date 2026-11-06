@@ -1,0 +1,23 @@
+# Test fixture of linuxpkg, built by the real abuild (tools/oracle/make_apk_fixtures.sh).
+# Every packaged file is in tools/oracle/fixture-src/common and was written for linuxpkg
+# (Apache-2.0); nothing third-party is packaged.
+pkgname=linuxpkg-fixture
+pkgver=1.0.0
+pkgrel=0
+pkgdesc="Test fixture of linuxpkg, built by abuild"
+url="https://github.com/pxgt/linuxpkg"
+arch="noarch"
+license="Apache-2.0"
+depends="busybox"
+install="$pkgname.post-install"
+options="!check"
+source="linuxpkg-fixture.sh linuxpkg-fixture.conf README"
+builddir="$srcdir"
+
+package() {
+	install -Dm755 "$srcdir"/linuxpkg-fixture.sh "$pkgdir"/usr/bin/linuxpkg-fixture
+	ln -s linuxpkg-fixture "$pkgdir"/usr/bin/lpf
+	install -Dm644 "$srcdir"/linuxpkg-fixture.conf "$pkgdir"/etc/linuxpkg-fixture.conf
+	install -Dm644 "$srcdir"/README "$pkgdir"/usr/share/doc/linuxpkg-fixture/README
+	install -dm750 "$pkgdir"/var/lib/linuxpkg-fixture
+}

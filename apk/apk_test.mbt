@@ -62,29 +62,52 @@ fn sample_spec() -> @spec.PackageSpec raise {
 
 ///|
 test "a package written by the real abuild is read and verified" {
-  let data = decode_hex(real_tree_package)
+  let data = decode_hex(real_abuild_package)
   let pkg = @apk.read(data)
-  assert_eq(pkg.signatures, [
-    ".SIGN.RSA.alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub",
+  assert_eq(pkg.signatures, [".SIGN.RSA.linuxpkg-test-only.rsa.pub"])
+  assert_eq(pkg.field("pkgname"), Some("linuxpkg-fixture"))
+  assert_eq(pkg.field("arch"), Some("noarch"))
+  assert_eq(pkg.field("pkgver"), Some("1.0.0-r0"))
+  assert_eq(pkg.field("builddate"), Some("1700000000"))
+  assert_eq(pkg.fields("depend"), ["busybox"])
+  // abuild adds the commands it finds in /usr/bin by itself.
+  assert_eq(pkg.fields("provides"), [
+    "cmd:linuxpkg-fixture=1.0.0-r0", "cmd:lpf=1.0.0-r0",
   ])
-  assert_eq(pkg.field("pkgname"), Some("tree"))
-  assert_eq(pkg.field("arch"), Some("x86_64"))
-  assert_eq(pkg.field("pkgver"), Some("2.1.1-r0"))
-  assert_eq(pkg.fields("depend"), ["so:libc.musl-x86_64.so.1"])
-  assert_eq(pkg.data.map(i => i.0.path), ["usr/", "usr/bin/", "usr/bin/tree"])
+  assert_eq(pkg.data.map(i => i.0.path), [
+    "etc/", "etc/linuxpkg-fixture.conf", "usr/", "usr/bin/", "usr/bin/linuxpkg-fixture",
+    "usr/bin/lpf", "usr/share/", "usr/share/doc/", "usr/share/doc/linuxpkg-fixture/",
+    "usr/share/doc/linuxpkg-fixture/README", "var/", "var/lib/", "var/lib/linuxpkg-fixture/",
+  ])
   assert_eq(pkg.verify(), [])
-  // datahash and the SHA-1 of the one file.
-  assert_eq(pkg.checked_files(), 2)
+  // The datahash and the SHA-1 records of the three files and the link.
+  assert_eq(pkg.checked_files(), 5)
   guard pkg.to_json() is Object(map) else { fail("object expected") }
   assert_eq(map["format"], Json::string("apk"))
-  assert_eq(map["version"], Json::string("2.1.1"))
+  assert_eq(map["version"], Json::string("1.0.0"))
   assert_eq(map["release"], Json::string("0"))
-  assert_eq(map["origin"], Json::string("tree"))
+  assert_eq(map["origin"], Json::string("linuxpkg-fixture"))
+}
+
+///|
+test "the signature abuild-sign made is checked with its public key" {
+  let pkg = @apk.read(decode_hex(real_abuild_package))
+  let ring = @sign.PublicKeyring::from_pem(abuild_test_key)
+  match pkg.signature_status(Some(ring)) {
+    @sign.Good(verified) =>
+      assert_eq(verified.key_id, "linuxpkg-test-only.rsa.pub")
+    _ => fail("expected a good signature")
+  }
+  // Without the key the package is only known to be signed.
+  assert_eq(
+    pkg.signature_status(None),
+    @sign.Signed(key_id="linuxpkg-test-only.rsa.pub"),
+  )
 }
 
 ///|
 test "a damaged real package is detected" {
-  let data = decode_hex(real_tree_package)
+  let data = decode_hex(real_abuild_package)
   // A flipped byte in the data stream: the stream no longer unpacks cleanly
   // or its hash differs.
   let copy = data.to_fixedarray()
