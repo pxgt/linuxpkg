@@ -28,9 +28,15 @@ version, directory = sys.argv[1:3]
 base = "https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/glibc/" + version + "/"
 
 def fetch(name):
+    # A broken connection resumes the partial file (-C -) instead of starting again.
     path = os.path.join(directory, name)
-    subprocess.run(["curl", "-fsSL", "--retry", "5", "-o", path + ".part", base + name], check=True)
-    os.replace(path + ".part", path)
+    for attempt in range(3):
+        done = subprocess.run(["curl", "-fsSL", "--retry", "5", "--retry-all-errors", "-C", "-",
+                               "-o", path + ".part", base + name]).returncode == 0
+        if done:
+            os.replace(path + ".part", path)
+            return
+    sys.exit("could not download " + base + name)
 
 def good(name, digest, size):
     path = os.path.join(directory, name)
