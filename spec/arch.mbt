@@ -1,6 +1,7 @@
 ///|
 /// CPU architectures shared by deb and rpm. The same value has a different
 /// spelling in each ecosystem, see `Arch::deb_name` and `Arch::rpm_name`.
+#derive(Eq, Debug)
 pub(all) enum Arch {
   Amd64
   Arm64
@@ -13,7 +14,7 @@ pub(all) enum Arch {
   Loong64
   Mips64le
   All
-} derive(Eq, Debug)
+}
 
 ///|
 /// Parse an architecture written the Debian way (`amd64`), the RPM way

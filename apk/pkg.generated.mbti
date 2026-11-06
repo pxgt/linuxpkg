@@ -6,6 +6,7 @@ import {
   "Xpeng/linuxpkg/sign",
   "Xpeng/linuxpkg/spec",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -24,14 +25,16 @@ pub fn sign_index(BytesView, @sign.SigningKey, key_name~ : String, created~ : In
 pub fn signature_stream(BytesView, @sign.SigningKey, key_name~ : String, created~ : Int64, hash? : @sign.RsaHash) -> Bytes raise ApkError
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror ApkError {
   Invalid(field~ : String, message~ : String)
   Corrupt(message~ : String)
   Unsupported(message~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub impl Show for ApkError
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct ApkPackage {
   signatures : Array[String]
   pkginfo : Array[(String, String)]
@@ -40,12 +43,12 @@ pub(all) struct ApkPackage {
   data_packed : Bytes
   control_packed : Bytes
   signature_files : Array[(String, Bytes, Int64)]
-} derive(Eq, @debug.Debug)
+}
 pub fn ApkPackage::checked_files(Self) -> Int32
 pub fn ApkPackage::field(Self, String) -> String?
 pub fn ApkPackage::fields(Self, String) -> Array[String]
 pub fn ApkPackage::signature_status(Self, @sign.PublicKeyring?) -> @sign.SignatureStatus
-pub fn ApkPackage::to_json(Self) -> Json
+pub fn ApkPackage::to_json(Self) -> @json.Json
 pub fn ApkPackage::verify(Self) -> Array[String]
 
 // Type aliases

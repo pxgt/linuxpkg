@@ -15,21 +15,23 @@ pub fn detect(BytesView) -> Compression
 pub fn gzip_members(BytesView, max_size? : Int32) -> Array[(Bytes, Bytes)] raise CompressError
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror CompressError {
   Corrupt(String)
   TooLarge(Int32)
   Unsupported(String)
-} derive(Eq, @debug.Debug)
+}
 pub impl Show for CompressError
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum Compression {
   None
   Gzip
   Xz
   Zstd
   Lzma
-} derive(Eq, @debug.Debug)
+}
 pub fn Compression::extension(Self) -> String
 pub fn Compression::from_extension(String) -> Self?
 pub fn Compression::name(Self) -> String

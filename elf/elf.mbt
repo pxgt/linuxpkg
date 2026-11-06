@@ -5,10 +5,11 @@
 /// shared libraries (`DT_NEEDED`) or names itself (`DT_SONAME`). A
 /// static-pie executable has a `.dynamic` segment but none of these, so it
 /// counts as `Static`, which is also what `file` calls it.
+#derive(Eq, Debug)
 pub(all) enum Linkage {
   Static
   Dynamic
-} derive(Eq, Debug)
+}
 
 ///|
 /// What the headers of an ELF file say.
@@ -18,6 +19,7 @@ pub(all) enum Linkage {
 /// `interpreter`, `needed` and `soname` come from the program headers and
 /// the `.dynamic` segment; section headers are never read, so a stripped
 /// file gives the same answer as an unstripped one.
+#derive(Eq, Debug)
 pub(all) struct ElfInfo {
   bits : Int32
   little_endian : Bool
@@ -28,7 +30,7 @@ pub(all) struct ElfInfo {
   interpreter : String?
   needed : Array[String]
   soname : String?
-} derive(Eq, Debug)
+}
 
 ///|
 const MAX_NAME : Int32 = 4096

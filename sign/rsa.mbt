@@ -1,10 +1,11 @@
 ///|
 /// The hash of a plain RSA signature (PKCS#1 v1.5), as Alpine's package
 /// tools use them: `Sha1` for `.SIGN.RSA.`, `Sha256` for `.SIGN.RSA256.`.
+#derive(Eq, Debug)
 pub(all) enum RsaHash {
   Sha1
   Sha256
-} derive(Eq, Debug)
+}
 
 ///|
 fn RsaHash::id(self : RsaHash) -> @primitives.HashId {

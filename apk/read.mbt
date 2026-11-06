@@ -1,5 +1,6 @@
 ///|
 /// An Alpine Linux package opened for inspection.
+#derive(Eq, Debug)
 pub(all) struct ApkPackage {
   /// The names of the signature files (`.SIGN.RSA.<key>`), when signed.
   signatures : Array[String]
@@ -15,7 +16,7 @@ pub(all) struct ApkPackage {
   control_packed : Bytes
   /// The signature files: `(name, content, mtime)`.
   signature_files : Array[(String, Bytes, Int64)]
-} derive(Eq, Debug)
+}
 
 ///|
 fn clean_path(path : String) -> String {

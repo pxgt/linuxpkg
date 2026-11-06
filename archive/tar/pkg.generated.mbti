@@ -15,14 +15,16 @@ pub fn parse(BytesView, max_entries? : Int32) -> Array[Entry] raise TarError
 pub fn parse_with_records(BytesView, max_entries? : Int32) -> Array[(Entry, Array[(String, String)])] raise TarError
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror TarError {
   Invalid(field~ : String, message~ : String)
   Corrupt(offset~ : Int32, message~ : String)
   Unsupported(message~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub impl Show for TarError
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct Entry {
   path : String
   kind : EntryKind
@@ -32,23 +34,25 @@ pub(all) struct Entry {
   uname : String
   gname : String
   mtime : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn Entry::dir(String, mode? : Int32, uid? : Int32, gid? : Int32, uname? : String, gname? : String, mtime? : Int64) -> Self
 pub fn Entry::file(String, Bytes, mode? : Int32, uid? : Int32, gid? : Int32, uname? : String, gname? : String, mtime? : Int64) -> Self
 pub fn Entry::symlink(String, String, uid? : Int32, gid? : Int32, uname? : String, gname? : String, mtime? : Int64) -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) enum EntryKind {
   File(Bytes)
   Dir
   Symlink(String)
   Hardlink(String)
   Special(Int32)
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) enum LongNames {
   Pax
   Gnu
-} derive(Eq, @debug.Debug)
+}
 
 // Type aliases
 

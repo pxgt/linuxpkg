@@ -3,6 +3,7 @@ package "Xpeng/linuxpkg/elf"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -12,17 +13,19 @@ pub fn machine_name(Int32) -> String
 
 pub fn parse(BytesView) -> ElfInfo raise ElfError
 
-pub fn summary(BytesView) -> Json
+pub fn summary(BytesView) -> @json.Json
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror ElfError {
   NotElf
   Truncated(String)
   Invalid(String)
-} derive(Eq, @debug.Debug)
+}
 pub impl Show for ElfError
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct ElfInfo {
   bits : Int32
   little_endian : Bool
@@ -33,15 +36,16 @@ pub(all) struct ElfInfo {
   interpreter : String?
   needed : Array[String]
   soname : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn ElfInfo::arch(Self) -> String?
 pub fn ElfInfo::describe(Self) -> String
-pub fn ElfInfo::to_json(Self) -> Json
+pub fn ElfInfo::to_json(Self) -> @json.Json
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Linkage {
   Static
   Dynamic
-} derive(Eq, @debug.Debug)
+}
 
 // Type aliases
 

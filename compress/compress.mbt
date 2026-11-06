@@ -2,13 +2,14 @@
 /// A stream compression used inside packages.
 ///
 /// `Lzma` (the old `.lzma` "alone" format) can only be read; nothing writes it.
+#derive(Eq, Debug)
 pub(all) enum Compression {
   None
   Gzip
   Xz
   Zstd
   Lzma
-} derive(Eq, Debug)
+}
 
 ///|
 /// The name used in configuration files and on the command line, such as

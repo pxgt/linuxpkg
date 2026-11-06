@@ -1,5 +1,6 @@
 ///|
 /// One line of `.MTREE`, with the `/set` defaults already applied.
+#derive(Eq, Debug)
 pub(all) struct MtreeEntry {
   /// Path relative to `/`, without `./` and without a trailing slash.
   path : String
@@ -10,11 +11,12 @@ pub(all) struct MtreeEntry {
   size : Int64?
   sha256 : String?
   link : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// An Arch Linux package opened for inspection: its `.PKGINFO`, `.MTREE`,
 /// `.INSTALL` and the tar entries.
+#derive(Eq, Debug)
 pub(all) struct ArchPackage {
   /// `zstd`, `xz`, `gzip`, `lzma` or `none`.
   compression : String
@@ -26,7 +28,7 @@ pub(all) struct ArchPackage {
   mtree : Array[MtreeEntry]?
   /// Every entry of the tar archive in order, metadata files included.
   entries : Array[@tar.Entry]
-} derive(Eq, Debug)
+}
 
 ///|
 /// `./usr/bin/` and `usr/bin` both become `usr/bin`.

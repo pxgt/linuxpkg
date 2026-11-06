@@ -6,11 +6,12 @@
 ///   bytes (the argument is that limit).
 /// - `Unsupported`: the stream is well formed but uses a feature this library
 ///   lacks.
+#derive(Eq, Debug)
 pub(all) suberror CompressError {
   Corrupt(String)
   TooLarge(Int32)
   Unsupported(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub impl Show for CompressError with fn output(self, logger) {

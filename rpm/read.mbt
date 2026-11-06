@@ -1,6 +1,7 @@
 ///|
 /// An rpm opened for inspection. The payload is kept compressed; only
 /// `payload_entries` and `verify` unpack it.
+#derive(Eq, Debug)
 pub(all) struct RpmPackage {
   /// The package label stored in the 96-byte lead (`name-version-release`).
   lead_name : String
@@ -10,10 +11,11 @@ pub(all) struct RpmPackage {
   header_bytes : Bytes
   /// The payload as stored, still compressed.
   payload : Bytes
-} derive(Eq, Debug)
+}
 
 ///|
 /// One file of the package as the header describes it.
+#derive(Eq, Debug)
 pub(all) struct RpmFile {
   /// Absolute install path.
   path : String
@@ -29,7 +31,7 @@ pub(all) struct RpmFile {
   group : String
   /// `RPMFILE_*` flags; bit 0 is a configuration file.
   flags : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Open an rpm: parse the lead, the signature header and the main header.

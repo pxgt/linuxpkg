@@ -22,12 +22,14 @@ pub fn validate_release(String) -> Unit raise SpecError
 pub fn validate_version(String) -> Unit raise SpecError
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror SpecError {
   Invalid(field~ : String, message~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub impl Show for SpecError
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum Arch {
   Amd64
   Arm64
@@ -40,12 +42,13 @@ pub(all) enum Arch {
   Loong64
   Mips64le
   All
-} derive(Eq, @debug.Debug)
+}
 pub fn Arch::deb_name(Self) -> String
 pub fn Arch::pacman_name(Self) -> String?
 pub fn Arch::parse(String) -> Self raise SpecError
 pub fn Arch::rpm_name(Self) -> String
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Config {
   name : String
   version : String
@@ -75,7 +78,7 @@ pub(all) struct Config {
   sign_key : String?
   apk_key_name : String?
   allow_arch_mismatch : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn Config::arch_compression(Self) -> @compress.Compression
 pub fn Config::deb_compression(Self) -> @compress.Compression
 pub fn Config::elf_warnings(Self, Map[String, Bytes]) -> Array[String]
@@ -84,6 +87,7 @@ pub fn Config::resolve(Self, Map[String, Bytes], default_mtime? : Int64) -> Pack
 pub fn Config::rpm_compression(Self) -> @compress.Compression
 pub fn Config::sources(Self) -> Array[String]
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Content {
   src : String?
   dst : String
@@ -92,24 +96,27 @@ pub(all) struct Content {
   owner : String?
   group : String?
   mtime : Int64?
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) enum ContentKind {
   File
   ConfigFile
   Dir
   Symlink
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Dependency {
   name : String
   constraint : (VersionOp, String)?
-} derive(Eq, @debug.Debug)
+}
 pub fn Dependency::deb_string(Self) -> String
 pub fn Dependency::parse(String, field? : String) -> Self raise SpecError
 pub fn Dependency::rpm_string(Self) -> String
 pub fn Dependency::validate(Self, field~ : String) -> Unit raise SpecError
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Entry {
   path : String
   kind : EntryKind
@@ -118,22 +125,25 @@ pub(all) struct Entry {
   group : String
   mtime : Int64?
   config : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn Entry::dir(String, mode? : Int32, owner? : String, group? : String, mtime? : Int64) -> Self
 pub fn Entry::file(String, Bytes, mode? : Int32, owner? : String, group? : String, mtime? : Int64, config? : Bool) -> Self
 pub fn Entry::symlink(String, String, owner? : String, group? : String, mtime? : Int64) -> Self
 pub fn Entry::validate(Self, field~ : String) -> Unit raise SpecError
 
+#derive(Eq, @debug.Debug)
 pub(all) enum EntryKind {
   File(Bytes)
   Dir
   Symlink(String)
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) struct FormatOptions {
   compression : @compress.Compression?
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) struct PackageSpec {
   name : String
   version : String
@@ -156,32 +166,35 @@ pub(all) struct PackageSpec {
   entries : Array[Entry]
   scripts : Scripts
   mtime : Int64
-} derive(Eq, @debug.Debug)
+}
 pub fn PackageSpec::new(name~ : String, version~ : String, arch~ : Arch, maintainer~ : String, description~ : String, release? : String, epoch? : Int32, homepage? : String, license? : String, vendor? : String, section? : String, priority? : String, depends? : Array[Dependency], recommends? : Array[Dependency], suggests? : Array[Dependency], conflicts? : Array[Dependency], replaces? : Array[Dependency], provides? : Array[Dependency], entries? : Array[Entry], scripts? : Scripts, mtime? : Int64) -> Self
 pub fn PackageSpec::validate(Self) -> Unit raise SpecError
 
+#derive(Eq, @debug.Debug)
 pub(all) struct ScriptPaths {
   pre_install : String?
   post_install : String?
   pre_remove : String?
   post_remove : String?
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Scripts {
   pre_install : String?
   post_install : String?
   pre_remove : String?
   post_remove : String?
-} derive(Eq, @debug.Debug)
+}
 pub fn Scripts::empty() -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) enum VersionOp {
   Lt
   Le
   Eq
   Ge
   Gt
-} derive(Eq, @debug.Debug)
+}
 pub fn VersionOp::deb_symbol(Self) -> String
 pub fn VersionOp::rpm_symbol(Self) -> String
 

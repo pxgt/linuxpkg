@@ -3,6 +3,7 @@ package "Xpeng/linuxpkg/nfpm"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -11,14 +12,15 @@ pub fn convert(String, Host, format? : String) -> Converted raise NfpmError
 pub fn expand(String, (String) -> String) -> String
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror NfpmError {
   Invalid(String)
-} derive(Eq, @debug.Debug)
+}
 pub impl Show for NfpmError
 
 // Types and methods
 pub(all) struct Converted {
-  config : Json
+  config : @json.Json
   warnings : Array[String]
 }
 

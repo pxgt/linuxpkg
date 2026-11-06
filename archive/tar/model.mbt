@@ -1,15 +1,17 @@
 ///|
 /// How names that do not fit a ustar header are stored.
+#derive(Eq, Debug)
 pub(all) enum LongNames {
   /// POSIX PAX extended headers (`x`). Understood by GNU tar, libarchive and
   /// Python, but not by the extractor inside `dpkg`.
   Pax
   /// GNU `L`/`K` pseudo entries, which is what `dpkg-deb` itself produces.
   Gnu
-} derive(Eq, Debug)
+}
 
 ///|
 /// What a tar entry stores.
+#derive(Eq, Debug)
 pub(all) enum EntryKind {
   /// A regular file with its full content.
   File(Bytes)
@@ -22,7 +24,7 @@ pub(all) enum EntryKind {
   /// Anything else (device, FIFO, ...), identified by its tar type flag.
   /// Readers report it; writers refuse it.
   Special(Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 /// One member of a tar archive.
@@ -30,6 +32,7 @@ pub(all) enum EntryKind {
 /// `path` is written exactly as given (conventionally `./usr/bin/hello`);
 /// directories get a trailing `/` added when it is missing. `mtime` is in
 /// seconds since the Unix epoch.
+#derive(Eq, Debug)
 pub(all) struct Entry {
   path : String
   kind : EntryKind
@@ -39,7 +42,7 @@ pub(all) struct Entry {
   uname : String
   gname : String
   mtime : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 /// A regular file. Defaults to mode `0644`, owner `root:root` (ids 0) and

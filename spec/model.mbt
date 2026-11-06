@@ -1,5 +1,6 @@
 ///|
 /// What an install-tree entry is.
+#derive(Eq, Debug)
 pub(all) enum EntryKind {
   /// A regular file with its full content.
   File(Bytes)
@@ -7,7 +8,7 @@ pub(all) enum EntryKind {
   Dir
   /// A symbolic link pointing at the given target.
   Symlink(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// One item of the installed file tree.
@@ -15,6 +16,7 @@ pub(all) enum EntryKind {
 /// `mtime` overrides the package-wide modification time for this entry.
 /// `config` marks a configuration file (`conffiles` in deb, `%config` in
 /// rpm) that package managers must not overwrite silently on upgrade.
+#derive(Eq, Debug)
 pub(all) struct Entry {
   path : String
   kind : EntryKind
@@ -23,7 +25,7 @@ pub(all) struct Entry {
   group : String
   mtime : Int64?
   config : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// A regular file. Defaults to mode `0644`, owner and group `root`.
@@ -73,30 +75,33 @@ pub fn Entry::symlink(
 
 ///|
 /// Comparison operators of a versioned relation such as `libc6 (>= 2.31)`.
+#derive(Eq, Debug)
 pub(all) enum VersionOp {
   Lt
   Le
   Eq
   Ge
   Gt
-} derive(Eq, Debug)
+}
 
 ///|
 /// A relation to another package (`Depends`, `Conflicts`, `Provides`, ...),
 /// optionally restricted to a version range.
+#derive(Eq, Debug)
 pub(all) struct Dependency {
   name : String
   constraint : (VersionOp, String)?
-} derive(Eq, Debug)
+}
 
 ///|
 /// Maintainer scripts. Each field holds the script text, shebang included.
+#derive(Eq, Debug)
 pub(all) struct Scripts {
   pre_install : String?
   post_install : String?
   pre_remove : String?
   post_remove : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// No maintainer scripts.
@@ -116,6 +121,7 @@ pub fn Scripts::empty() -> Scripts {
 /// the file system and works on every backend. `mtime` is the default
 /// modification time (seconds since the Unix epoch) of all entries and of the
 /// build itself; fixing it is what makes builds reproducible.
+#derive(Eq, Debug)
 pub(all) struct PackageSpec {
   name : String
   version : String
@@ -138,7 +144,7 @@ pub(all) struct PackageSpec {
   entries : Array[Entry]
   scripts : Scripts
   mtime : Int64
-} derive(Eq, Debug)
+}
 
 ///|
 /// Create a package description. Only the identity of the package is

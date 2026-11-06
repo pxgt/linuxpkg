@@ -5,6 +5,7 @@
 /// `mode` is the complete `st_mode` including the file type bits
 /// (`0o100644` regular file, `0o040755` directory, `0o120777` symlink; a
 /// symlink stores its target as `data`). All numbers must fit 32 bits.
+#derive(Eq, Debug)
 pub(all) struct Entry {
   path : String
   data : Bytes
@@ -18,7 +19,7 @@ pub(all) struct Entry {
   dev_minor : Int32
   rdev_major : Int32
   rdev_minor : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// A regular file. Defaults: mode `0100644`, owner 0:0, one link, mtime 0,

@@ -50,16 +50,18 @@ pub fn sign_yum(Array[(String, Bytes)], @sign.SigningKey, created~ : Int64) -> A
 pub fn yum_index(Array[PackageFile], timestamp~ : Int64) -> Array[(String, Bytes)] raise RepoError
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror RepoError {
   Invalid(file~ : String, message~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub impl Show for RepoError
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) struct PackageFile {
   name : String
   data : Bytes
-} derive(Eq, @debug.Debug)
+}
 
 // Type aliases
 
